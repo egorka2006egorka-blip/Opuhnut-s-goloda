@@ -2,7 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 
 /// <summary>
-/// Подбор оружия на E, бросок на G, удержание перед камерой (покачивание, инерция, отдача на ЛКМ),
+/// Подбор оружия и открытие калиток и дверей на E, бросок на G, удержание перед камерой (покачивание, инерция, отдача на ЛКМ),
 /// прицел и подсказки на экране.
 /// </summary>
 [DefaultExecutionOrder(-10)] // раньше контроллера: клик, захватывающий курсор, не должен стрелять
@@ -26,6 +26,7 @@ public class PlayerWeaponHandler : MonoBehaviour
     public float ArmedWeight { get; private set; }
 
     WeaponPickup lookTarget;
+    SwingGate lookGate;
     float pickupT = 1f;
     Vector3 pickupStartLocalPos;
     Quaternion pickupStartLocalRot;
@@ -118,8 +119,11 @@ public class PlayerWeaponHandler : MonoBehaviour
         UpdateAim(mouse, locked);
 
         lookTarget = FindLookTarget();
+        lookGate = lookTarget == null ? FindLookGate() : null;
         if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookTarget != null)
             PickUp(lookTarget);
+        else if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookGate != null)
+            lookGate.Toggle(transform.position);
         else if (locked && keyboard != null && keyboard.gKey.wasPressedThisFrame && CurrentWeapon != null)
             Throw();
 
@@ -695,6 +699,19 @@ public class PlayerWeaponHandler : MonoBehaviour
         return best;
     }
 
+    /// <summary>Калитка, на которую смотрит игрок (луч из центра экрана).</summary>
+    SwingGate FindLookGate()
+    {
+        if (playerCamera == null) return null;
+        Transform cam = playerCamera.transform;
+        var hits = Physics.RaycastAll(cam.position, cam.forward, pickupRange + 0.5f, ~0, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (x, y) => x.distance.CompareTo(y.distance));
+        // Первое попадание не в самого игрока: калитка должна быть ближайшим препятствием.
+        foreach (var hit in hits)
+            if (!hit.transform.IsChildOf(transform)) return SwingGate.Find(hit.transform);
+        return null;
+    }
+
     static Vector3 WeaponCenter(WeaponPickup w)
     {
         var r = w.GetComponentInChildren<Renderer>();
@@ -783,6 +800,7 @@ public class PlayerWeaponHandler : MonoBehaviour
             var cc = GetComponent<CharacterController>();
             Transform cam = playerCamera.transform;
             effects.Fire(cam.position, cam.forward, cc != null ? cc.velocity : Vector3.zero, cc);
+            if (controller != null) controller.AddShake(effects.cameraShake);
         }
     }
 
@@ -859,9 +877,10 @@ public class PlayerWeaponHandler : MonoBehaviour
         GUI.DrawTexture(new Rect(cx - 2, cy - 2, 4, 4), Texture2D.whiteTexture);
 
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(16, Screen.height / 40), alignment = TextAnchor.MiddleCenter };
-        if (lookTarget != null && Cursor.lockState == CursorLockMode.Locked)
+        if ((lookTarget != null || lookGate != null) && Cursor.lockState == CursorLockMode.Locked)
         {
-            string text = "[E]  Подобрать: " + lookTarget.displayName;
+            string text = lookTarget != null ? "[E]  Подобрать: " + lookTarget.displayName
+                : lookGate.IsOpen ? "[E]  Закрыть" : "[E]  Открыть";
             var rect = new Rect(cx - 300, cy + 40, 600, 40);
             GUI.color = new Color(0, 0, 0, 0.8f);
             GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), text, style);

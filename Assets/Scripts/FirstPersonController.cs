@@ -22,6 +22,8 @@ public class FirstPersonController : MonoBehaviour
     public float acceleration = 12f;
     public float jumpHeight = 1.0f;
     public float gravity = -20f;
+    [Tooltip("На спуске по лестнице и наклону персонаж прижимается к полу, если тот не дальше этого (м).")]
+    public float groundSnap = 0.4f;
 
     [Header("Обзор")]
     public float mouseSensitivity = 0.12f;
@@ -49,6 +51,30 @@ public class FirstPersonController : MonoBehaviour
     float verticalVelocity;
     float bobBlend;
     float recoilTarget, recoilPitch;
+    float shake;
+
+    /// <summary>Пол под ногами не дальше maxGap (м): зазор до него и нормаль. Свои коллайдеры не считаются.</summary>
+    bool ProbeGround(float maxGap, out float gap, out Vector3 normal)
+    {
+        float half = controller.height / 2f - controller.radius;
+        Vector3 center = transform.TransformPoint(controller.center);
+        gap = float.MaxValue;
+        normal = Vector3.up;
+        foreach (var hit in Physics.SphereCastAll(center, controller.radius * 0.95f, Vector3.down, half + maxGap, ~0, QueryTriggerInteraction.Ignore))
+        {
+            if (hit.collider == controller || hit.transform.IsChildOf(transform) || hit.distance <= 0f) continue;
+            if (hit.distance - half < gap) { gap = hit.distance - half; normal = hit.normal; }
+        }
+        return gap < float.MaxValue;
+    }
+
+    /// <summary>Шаг вниз по наклону оторвал от пола — опускаемся на пол, если он близко под ногами.</summary>
+    void SnapToGround()
+    {
+        if (controller.isGrounded) return;
+        if (ProbeGround(groundSnap, out float gap, out _))
+            controller.Move(Vector3.down * (gap + controller.skinWidth));
+    }
 
     void Awake()
     {
@@ -91,12 +117,20 @@ public class FirstPersonController : MonoBehaviour
             sprint = keyboard.leftShiftKey.isPressed && input.y > 0f;
             jump = keyboard.spaceKey.wasPressedThisFrame;
         }
+        Locomotion(input, sprint, jump, Time.deltaTime);
+        UpdateCamera();
+    }
+
+    /// <summary>Шаг движения за dt: ввод (x — вбок, y — вперёд), бег, прыжок.</summary>
+    public void Locomotion(Vector2 input, bool sprint, bool jump, float dt)
+    {
+        if (controller == null) controller = GetComponent<CharacterController>();
         input = Vector2.ClampMagnitude(input, 1f);
 
         float targetSpeed = sprint ? sprintSpeed : walkSpeed;
         Vector3 wishVelocity = (transform.right * input.x + transform.forward * input.y) * targetSpeed;
         float accel = controller.isGrounded ? acceleration : acceleration * 0.3f;
-        horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, wishVelocity, accel * targetSpeed * Time.deltaTime);
+        horizontalVelocity = Vector3.MoveTowards(horizontalVelocity, wishVelocity, accel * targetSpeed * dt);
 
         // Гравитация и прыжок.
         if (controller.isGrounded)
@@ -104,20 +138,28 @@ public class FirstPersonController : MonoBehaviour
             if (verticalVelocity < 0f) verticalVelocity = -2f;
             if (jump) verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
         }
-        verticalVelocity += gravity * Time.deltaTime;
+        verticalVelocity += gravity * dt;
 
         Vector3 motion = horizontalVelocity + Vector3.up * verticalVelocity;
-        controller.Move(motion * Time.deltaTime);
+        // На лестнице и наклоне идём вдоль поверхности: горизонтальная скорость та же, что на ровном полу,
+        // и вверх, и вниз (иначе вниз капсула слетает с наклона, а вверх упирается в него).
+        if (controller.isGrounded && verticalVelocity < 0f
+            && ProbeGround(controller.skinWidth + 0.1f, out _, out Vector3 groundNormal)
+            && groundNormal.y > Mathf.Cos(controller.slopeLimit * Mathf.Deg2Rad))
+            motion.y -= Vector3.Dot(horizontalVelocity, groundNormal) / groundNormal.y;
+        bool wasGrounded = controller.isGrounded;
+        Vector3 start = transform.position;
+        controller.Move(motion * dt);
+        if (wasGrounded && verticalVelocity < 0f) SnapToGround();
 
-        // Фактическая скорость (учитывает упор в стены).
-        Vector3 v = controller.velocity; v.y = 0f;
-        HorizontalSpeed = v.magnitude;
+        // Фактическая скорость за кадр (учитывает упор в стены). controller.velocity не годится:
+        // после прижима к полу в нём только движение вниз, и на спуске шаг бы замирал.
+        Vector3 v = transform.position - start; v.y = 0f;
+        HorizontalSpeed = dt > 0f ? v.magnitude / dt : 0f;
         float targetMove = controller.isGrounded ? Mathf.Clamp01(HorizontalSpeed / sprintSpeed * 1.4f) : 0f;
-        MoveAmount = Mathf.MoveTowards(MoveAmount, targetMove, Time.deltaTime * 4f);
-        StepPhase += HorizontalSpeed / strideLength * Mathf.PI * Time.deltaTime;
+        MoveAmount = Mathf.MoveTowards(MoveAmount, targetMove, dt * 4f);
+        StepPhase += HorizontalSpeed / strideLength * Mathf.PI * dt;
         if (StepPhase > Mathf.PI * 200f) StepPhase -= Mathf.PI * 200f;
-
-        UpdateCamera();
     }
 
     void UpdateCamera()
@@ -131,7 +173,11 @@ public class FirstPersonController : MonoBehaviour
         // Отдача: камера быстро подбрасывается и плавно возвращается.
         recoilTarget = Mathf.MoveTowards(recoilTarget, 0f, Time.deltaTime * 9f);
         recoilPitch = Mathf.Lerp(recoilPitch, recoilTarget, Time.deltaTime * 25f);
-        cameraPivot.localRotation = Quaternion.Euler(Pitch - recoilPitch, 0f, recoilPitch * 0.15f);
+        // Тряска от выстрела: быстрое шумовое дрожание, затухающее за доли секунды.
+        shake = Mathf.MoveTowards(shake, 0f, Time.deltaTime * 5f);
+        float shakeX = (Mathf.PerlinNoise(Time.time * 40f, 0.3f) - 0.5f) * 2f * shake;
+        float shakeY = (Mathf.PerlinNoise(0.7f, Time.time * 40f) - 0.5f) * 2f * shake;
+        cameraPivot.localRotation = Quaternion.Euler(Pitch - recoilPitch + shakeX, shakeY, recoilPitch * 0.15f + shakeY * 0.5f);
 
         if (playerCamera != null)
         {
@@ -156,6 +202,12 @@ public class FirstPersonController : MonoBehaviour
     {
         recoilTarget = Mathf.Min(recoilTarget + up, 8f);
         transform.Rotate(0f, side, 0f, Space.Self);
+    }
+
+    /// <summary>Тряска камеры (амплитуда в градусах).</summary>
+    public void AddShake(float amount)
+    {
+        shake = Mathf.Min(shake + amount, 1.5f);
     }
 
     static void LockCursor(bool locked)

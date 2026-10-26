@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -15,6 +16,7 @@ public static class CanteenSceneBuilder
 {
     const string ScenePath = "Assets/Scenes/Canteen.unity";
     const string CanteenPath = "Assets/Models location/Canteen_LowPoly.glb";
+    const string KitchenPath = "Assets/Models location/UniversityKitchen_LowPoly_1.glb";
     // Новая модель персонажа; если её нет — старая.
     static readonly string[] CharacterPaths = { "Assets/Characters/MainCharacter 1.glb", "Assets/Characters/MainCharacter.glb" };
     // Новая модель пистолета; если её нет — старая.
@@ -26,7 +28,7 @@ public static class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 18;
+    const int BuildVersion = 30;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
 
     static CanteenSceneBuilder()
@@ -39,7 +41,7 @@ public static class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился (MP5: рука взводит затвор сверху, а не сквозь оружие). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился (дверь к лестнице вниз из кухни, подъём по лестницам без застревания). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -50,6 +52,7 @@ public static class CanteenSceneBuilder
     public static void Build()
     {
         var canteenAsset = AssetDatabase.LoadAssetAtPath<GameObject>(CanteenPath);
+        var kitchenAsset = AssetDatabase.LoadAssetAtPath<GameObject>(KitchenPath);
         var characterAsset = CharacterPaths.Select(AssetDatabase.LoadAssetAtPath<GameObject>).FirstOrDefault(a => a != null);
         var rifleAsset = AssetDatabase.LoadAssetAtPath<GameObject>(RiflePath);
         var shotgunAsset = AssetDatabase.LoadAssetAtPath<GameObject>(ShotgunPath);
@@ -67,14 +70,33 @@ public static class CanteenSceneBuilder
 
         // ---------- Столовая ----------
         var canteen = Spawn(canteenAsset, "Canteen");
-        string[] noCollider = { "Outside_View", "LED_", "Bunting", "HangingSign", "Floor_Footprints", "AC_" };
-        foreach (var mf in canteen.GetComponentsInChildren<MeshFilter>(true))
+        MakeStaticWithColliders(canteen, "Outside_View", "LED_", "Bunting", "HangingSign", "Floor_Footprints", "AC_");
+        var stairsUp = FindChild(canteen.transform, "Entrance2_StairTunnel_Up");
+        if (stairsUp != null) AddStairRamp(stairsUp);
+
+        // ---------- Кухня ----------
+        // Модель кухни сделана в координатах столовой: в начале координат её передняя стена
+        // встаёт вплотную к задней стене столовой, а её дверь совпадает с дверью за калиткой.
+        if (kitchenAsset != null)
         {
-            if (mf.sharedMesh == null || noCollider.Any(n => mf.name.StartsWith(n))) continue;
-            if (mf.GetComponent<Collider>() == null) mf.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+            var kitchen = Spawn(kitchenAsset, "UniversityKitchen");
+            MakeStaticWithColliders(kitchen);
+            AddKitchenLights(kitchen.transform);
+            BuildStairsDown(canteen.transform, kitchen.transform);
+            // В проёме остаётся одна дверь — со стороны столовой.
+            FindChild(kitchen.transform, "Door_ToCanteen")?.gameObject.SetActive(false);
         }
-        foreach (var t in canteen.GetComponentsInChildren<Transform>(true))
-            GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+        SetupDoor(FindChild(canteen.transform, "Door_001"));
+
+        // Калитка между линиями раздачи у входа: створки открываются на E, поэтому не статичны.
+        var gate = FindChild(canteen.transform, "Service_Gate");
+        if (gate != null)
+        {
+            var leaves = new[] { FindChild(gate, "Gate_Leaf_Left"), FindChild(gate, "Gate_Leaf_Right") }.Where(l => l != null).ToArray();
+            foreach (var t in gate.GetComponentsInChildren<Transform>(true))
+                GameObjectUtility.SetStaticEditorFlags(t.gameObject, 0);
+            gate.gameObject.AddComponent<SwingGate>().leaves = leaves;
+        }
 
         Bounds floor = RendererBounds(FindChild(canteen.transform, "Floor"), new Bounds(Vector3.zero, new Vector3(30, 0, 20)));
         float floorY = floor.max.y;
@@ -126,6 +148,7 @@ public static class CanteenSceneBuilder
             rifle.recoilScale = 0.45f;
             rifle.reloadDuration = 2.4f;
             rifle.stowMagazine = true;
+            SetShotEffects(rifle, WeaponEffects.Profile.Rifle, 1.35f, 3, 0.45f);
         }
         if (shotgunAsset != null)
         {
@@ -160,6 +183,7 @@ public static class CanteenSceneBuilder
             uzi.fireInterval = 0.05f; // 1200 выстр./мин
             uzi.recoilScale = 0.35f;
             uzi.reloadDuration = 2.1f;
+            SetShotEffects(uzi, WeaponEffects.Profile.SMG, 0.85f, 2, 0.22f);
         }
         if (mp5Asset != null)
         {
@@ -181,6 +205,7 @@ public static class CanteenSceneBuilder
             mp5.recoilScale = 0.3f;
             mp5.reloadDuration = 2.3f;
             mp5.rackRoll = 35f; // крен влево поднимает рукоять (она справа над цевьём) навстречу руке, идущей сверху
+            SetShotEffects(mp5, WeaponEffects.Profile.SMG, 0.9f, 2, 0.25f);
         }
 
         Selection.activeGameObject = player;
@@ -462,6 +487,18 @@ public static class CanteenSceneBuilder
         fx.casingScale = new Vector3(0.0205f, 0.035f, 0.0205f);
         fx.pellets = 9;
         fx.spreadAngle = 3.5f;
+        SetShotEffects(pickup, WeaponEffects.Profile.Shotgun, 1.8f, 7, 0.9f);
+    }
+
+    /// <summary>Звук, размер вспышки, количество дыма и тряска камеры для типа оружия (по умолчанию — пистолет).</summary>
+    static void SetShotEffects(Component weapon, WeaponEffects.Profile profile, float flashScale, int smoke, float shake)
+    {
+        var fx = weapon.GetComponent<WeaponEffects>();
+        if (fx == null) return;
+        fx.profile = profile;
+        fx.flashScale = flashScale;
+        fx.smokePerShot = smoke;
+        fx.cameraShake = shake;
     }
 
     /// <summary>Коллайдер по габаритам модели, дуло и окно выброса гильз, эффекты выстрела.</summary>
@@ -601,6 +638,21 @@ public static class CanteenSceneBuilder
         fx.sparkMaterial = SaveParticleMaterial("FX_Spark", sparkTex, true);
         fx.decalMaterial = SaveParticleMaterial("FX_BulletHole", holeTex, false);
 
+        // Дым и пыль: мягкое неровное облачко (белое — цвет задают частицы).
+        var smokeTex = SaveTexture("Smoke", 128, (x, y) =>
+        {
+            float r = Mathf.Sqrt(x * x + y * y);
+            float n = Mathf.PerlinNoise(x * 3f + 10f, y * 3f + 10f) * 0.65f + Mathf.PerlinNoise(x * 7f + 3f, y * 7f + 5f) * 0.35f;
+            float alpha = Mathf.Clamp01((1f - Mathf.SmoothStep(0.2f, 1f, r)) * (0.45f + 0.75f * n));
+            return new Color(1f, 1f, 1f, alpha);
+        });
+        fx.smokeMaterial = SaveParticleMaterial("FX_Smoke", smokeTex, false);
+
+        // Осколки: непрозрачные, освещаемые, цвет — из цвета частицы (цвет поверхности).
+        var debris = new Material(Shader.Find("Universal Render Pipeline/Particles/Simple Lit")) { name = "FX_Debris" };
+        debris.SetColor("_BaseColor", Color.white);
+        fx.debrisMaterial = SaveAsset(debris, EffectsFolder + "/FX_Debris.mat");
+
         var brass = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "FX_Brass" };
         brass.SetColor("_BaseColor", new Color(0.85f, 0.62f, 0.25f));
         brass.SetFloat("_Metallic", 0.9f);
@@ -665,6 +717,305 @@ public static class CanteenSceneBuilder
     }
 
     // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Коллайдеры на все меши (кроме имён с указанными префиксами) и статические флаги.</summary>
+    static void MakeStaticWithColliders(GameObject root, params string[] noCollider)
+    {
+        foreach (var mf in root.GetComponentsInChildren<MeshFilter>(true))
+        {
+            if (mf.sharedMesh == null || noCollider.Any(n => mf.name.StartsWith(n))) continue;
+            if (mf.GetComponent<Collider>() == null) mf.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+        }
+        foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            GameObjectUtility.SetStaticEditorFlags(t.gameObject, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+    }
+
+    /// <summary>
+    /// Дверь, открывающаяся на E (от игрока) на петлях со стороны, противоположной ручке; ручка при этом нажимается.
+    /// Полотно в модели частично вывернуто наизнанку (в Unity грани не видны и ручка «висит в воздухе») — меш исправляется.
+    /// </summary>
+    static void SetupDoor(Transform door)
+    {
+        if (door == null) return;
+        foreach (var t in door.GetComponentsInChildren<Transform>(true))
+            GameObjectUtility.SetStaticEditorFlags(t.gameObject, 0);
+        var mf = door.GetComponent<MeshFilter>();
+        Vector3 hingeLocal = Vector3.zero;
+        if (mf != null && mf.sharedMesh != null)
+        {
+            var mesh = FixInsideOutFaces(mf.sharedMesh);
+            mf.sharedMesh = mesh;
+            var mc = door.GetComponent<MeshCollider>();
+            if (mc != null) mc.sharedMesh = mesh;
+            hingeLocal = DoorHinge(mesh, door.GetComponent<MeshRenderer>());
+        }
+        var swing = door.gameObject.AddComponent<SwingGate>();
+        swing.leaves = new[] { door };
+        swing.hinges = new[] { door.parent.InverseTransformPoint(door.TransformPoint(hingeLocal)) };
+        swing.openAngle = 90f;
+        if (mf != null && mf.sharedMesh != null)
+        {
+            swing.handle = SplitHandle(door, mf.sharedMesh, out float downSign);
+            swing.handlePressAngle = 30f * downSign;
+        }
+    }
+
+    /// <summary>
+    /// Отделяет рычаги ручки (детали хромового подмеша, далеко выступающие из полотна) в дочерний объект Handle
+    /// с pivot на оси ручки — в центре розеток. downSign — знак поворота вокруг локальной Z, опускающего рычаг.
+    /// </summary>
+    static Transform SplitHandle(Transform door, Mesh mesh, out float downSign)
+    {
+        downSign = -1f;
+        var mats = door.GetComponent<MeshRenderer>().sharedMaterials;
+        int s = System.Array.FindIndex(mats, m => m != null && m.name.Contains("Chrome"));
+        if (s < 0 || s >= mesh.subMeshCount) return null;
+
+        var v = mesh.vertices;
+        var tri = mesh.GetTriangles(s);
+        var part = TrianglePartIds(v, tri);
+        var bounds = new Dictionary<int, Bounds>();
+        for (int i = 0; i < tri.Length; i++)
+        {
+            int p = part[i / 3];
+            if (bounds.TryGetValue(p, out var b)) { b.Encapsulate(v[tri[i]]); bounds[p] = b; }
+            else bounds[p] = new Bounds(v[tri[i]], Vector3.zero);
+        }
+        // Рычаги выступают из полотна намного дальше розеток.
+        float planeZ = mesh.bounds.center.z;
+        float Depth(Bounds b) => Mathf.Max(Mathf.Abs(b.max.z - planeZ), Mathf.Abs(b.min.z - planeZ));
+        float maxDepth = bounds.Values.Max(Depth);
+        var levers = new HashSet<int>(bounds.Where(kv => Depth(kv.Value) > maxDepth * 0.6f).Select(kv => kv.Key));
+        var roses = bounds.Where(kv => !levers.Contains(kv.Key)).Select(kv => kv.Value.center).ToList();
+        if (levers.Count == 0 || roses.Count == 0) return null;
+        Vector3 pivot = roses.Aggregate(Vector3.zero, (a, c) => a + c) / roses.Count;
+        pivot.z = planeZ;
+
+        var n = mesh.normals;
+        var uv = mesh.uv;
+        bool hasUv = uv.Length == v.Length;
+        var hv = new List<Vector3>(); var hn = new List<Vector3>(); var huv = new List<Vector2>();
+        var keep = new List<int>();
+        Vector3 tip = pivot;
+        for (int i = 0; i < tri.Length; i += 3)
+        {
+            if (!levers.Contains(part[i / 3])) { keep.Add(tri[i]); keep.Add(tri[i + 1]); keep.Add(tri[i + 2]); continue; }
+            for (int k = 0; k < 3; k++)
+            {
+                Vector3 p = v[tri[i + k]];
+                if (new Vector2(p.x - pivot.x, p.y - pivot.y).sqrMagnitude > new Vector2(tip.x - pivot.x, tip.y - pivot.y).sqrMagnitude) tip = p;
+                hv.Add(p - pivot);
+                hn.Add(n[tri[i + k]]);
+                if (hasUv) huv.Add(uv[tri[i + k]]);
+            }
+        }
+        mesh.SetTriangles(keep, s);
+
+        var handleMesh = new Mesh { name = mesh.name + "_Handle" };
+        handleMesh.SetVertices(hv);
+        handleMesh.SetNormals(hn);
+        if (hasUv) handleMesh.SetUVs(0, huv);
+        handleMesh.SetTriangles(Enumerable.Range(0, hv.Count).ToArray(), 0);
+        handleMesh.RecalculateBounds();
+
+        var go = new GameObject("Handle");
+        go.transform.SetParent(door, false);
+        go.transform.localPosition = pivot;
+        go.AddComponent<MeshFilter>().sharedMesh = handleMesh;
+        go.AddComponent<MeshRenderer>().sharedMaterial = mats[s];
+        // Поворот на +угол вокруг Z поднимает точку, лежащую по +X от оси, — значит, вниз её ведёт знак −X.
+        downSign = tip.x > pivot.x ? -1f : 1f;
+        return go.transform;
+    }
+
+    /// <summary>Петля двери — нижний край полотна (по локальной X) на стороне, противоположной ручке.</summary>
+    static Vector3 DoorHinge(Mesh mesh, MeshRenderer mr)
+    {
+        Bounds b = mesh.bounds;
+        float handleX = b.center.x;
+        var mats = mr != null ? mr.sharedMaterials : new Material[0];
+        for (int s = 0; s < mesh.subMeshCount && s < mats.Length; s++)
+            if (mats[s] != null && mats[s].name.Contains("Chrome"))
+                handleX = mesh.GetSubMesh(s).bounds.center.x;
+        return new Vector3(handleX > b.center.x ? b.min.x : b.max.x, b.min.y, b.center.z);
+    }
+
+    /// <summary>
+    /// Копия меша, в которой каждая грань смотрит наружу: луч из грани по её нормали должен пересечь
+    /// поверхность своей детали (связного куска подмеша) чётное число раз. Нормали — плоские, по граням.
+    /// </summary>
+    static Mesh FixInsideOutFaces(Mesh src)
+    {
+        var v = src.vertices;
+        var uv = src.uv;
+        bool hasUv = uv.Length == v.Length;
+        var verts = new List<Vector3>();
+        var norms = new List<Vector3>();
+        var uvs = new List<Vector2>();
+        var subs = new int[src.subMeshCount][];
+        // Небольшой наклон луча, чтобы он не проходил ровно по рёбрам треугольников.
+        Vector3 jitter = new Vector3(0.0137f, 0.0091f, 0.0053f);
+        for (int s = 0; s < src.subMeshCount; s++)
+        {
+            var tri = src.GetTriangles(s);
+            var part = TrianglePartIds(v, tri);
+            var idx = new List<int>();
+            for (int i = 0; i < tri.Length; i += 3)
+            {
+                Vector3 a = v[tri[i]], b = v[tri[i + 1]], c = v[tri[i + 2]];
+                Vector3 n = Vector3.Cross(b - a, c - a);
+                if (n.sqrMagnitude < 1e-14f) continue;
+                n.Normalize();
+                Vector3 dir = (n + jitter).normalized;
+                Vector3 o = (a + b + c) / 3f + n * 1e-4f;
+                int hits = 0;
+                for (int j = 0; j < tri.Length; j += 3)
+                    if (j != i && part[j / 3] == part[i / 3] && RayHitsTriangle(o, dir, v[tri[j]], v[tri[j + 1]], v[tri[j + 2]])) hits++;
+                bool flip = hits % 2 == 1;
+                int[] order = flip ? new[] { 0, 2, 1 } : new[] { 0, 1, 2 };
+                foreach (int k in order)
+                {
+                    idx.Add(verts.Count);
+                    verts.Add(v[tri[i + k]]);
+                    norms.Add(flip ? -n : n);
+                    if (hasUv) uvs.Add(uv[tri[i + k]]);
+                }
+            }
+            subs[s] = idx.ToArray();
+        }
+        var mesh = new Mesh { name = src.name + "_Fixed" };
+        mesh.SetVertices(verts);
+        mesh.SetNormals(norms);
+        if (hasUv) mesh.SetUVs(0, uvs);
+        mesh.subMeshCount = subs.Length;
+        for (int s = 0; s < subs.Length; s++) mesh.SetTriangles(subs[s], s);
+        mesh.RecalculateBounds();
+        if (hasUv) mesh.RecalculateTangents();
+        return mesh;
+    }
+
+    /// <summary>Номер связной детали для каждого треугольника (вершины в одной точке считаются общими).</summary>
+    static int[] TrianglePartIds(Vector3[] v, int[] tri)
+    {
+        var root = new Dictionary<Vector3, Vector3>();
+        Vector3 Find(Vector3 x)
+        {
+            if (!root.TryGetValue(x, out var r)) { root[x] = x; return x; }
+            if (r == x) return x;
+            r = Find(r);
+            root[x] = r;
+            return r;
+        }
+        for (int i = 0; i < tri.Length; i += 3)
+        {
+            Vector3 a = Find(v[tri[i]]);
+            root[Find(v[tri[i + 1]])] = a;
+            root[Find(v[tri[i + 2]])] = a;
+        }
+        var ids = new Dictionary<Vector3, int>();
+        var part = new int[tri.Length / 3];
+        for (int i = 0; i < part.Length; i++)
+        {
+            Vector3 r = Find(v[tri[i * 3]]);
+            if (!ids.TryGetValue(r, out int id)) ids[r] = id = ids.Count;
+            part[i] = id;
+        }
+        return part;
+    }
+
+    static bool RayHitsTriangle(Vector3 o, Vector3 d, Vector3 a, Vector3 b, Vector3 c)
+    {
+        Vector3 e1 = b - a, e2 = c - a, p = Vector3.Cross(d, e2);
+        float det = Vector3.Dot(e1, p);
+        if (Mathf.Abs(det) < 1e-12f) return false;
+        Vector3 s = o - a;
+        float u = Vector3.Dot(s, p) / det;
+        if (u < 0f || u > 1f) return false;
+        Vector3 q = Vector3.Cross(s, e1);
+        float w = Vector3.Dot(d, q) / det;
+        if (w < 0f || u + w > 1f) return false;
+        return Vector3.Dot(e2, q) / det > 1e-6f;
+    }
+
+    /// <summary>
+    /// Лестница вниз за дверным проёмом в задней стене кухни: копия лестницы Entrance2_StairTunnel_Up,
+    /// развёрнутая так, что её верхняя площадка примыкает к проёму, а пролёт уходит вниз.
+    /// </summary>
+    static void BuildStairsDown(Transform canteen, Transform kitchen)
+    {
+        var source = FindChild(canteen, "Entrance2_StairTunnel_Up");
+        var doorToCanteen = FindChild(kitchen, "Door_ToCanteen");
+        var kitchenFloor = FindChild(kitchen, "Room_Floor");
+        if (source == null || doorToCanteen == null || kitchenFloor == null) return;
+
+        // Проём в задней стене — в 2,4 м от двери в столовую в сторону середины кухни.
+        Bounds floor = RendererBounds(kitchenFloor, new Bounds(kitchen.position, Vector3.zero));
+        Vector3 door = doorToCanteen.position;
+        bool backIsMinZ = door.z > floor.center.z;
+        Vector3 outward = backIsMinZ ? Vector3.back : Vector3.forward;
+        Vector3 opening = new Vector3(door.x + 2.4f * Mathf.Sign(floor.center.x - door.x), floor.max.y,
+            backIsMinZ ? floor.min.z : floor.max.z);
+
+        var stairs = Object.Instantiate(source.gameObject).transform;
+        stairs.name = "Entrance3_StairTunnel_Down";
+        // В модели подъём идёт вдоль локальной −Z, верхний порог — (0; 4,4; −7,2): подъём направлен из тоннеля в кухню.
+        stairs.rotation = Quaternion.LookRotation(outward);
+        stairs.position += opening - stairs.TransformPoint(new Vector3(0f, 4.4f, -7.2f));
+        // Дверь со стороны кухни открывается на E, внизу остаётся закрытая дверь.
+        var doorTop = FindChild(stairs, "Door_Top");
+        if (doorTop != null) SetupDoor(FindChild(doorTop, "Door"));
+
+        // Тоннель под землёй — свет вдоль пролёта, под потолком.
+        foreach (var p in new[] { new Vector3(0f, 2.1f, -0.7f), new Vector3(0f, 4.3f, -3.6f), new Vector3(0f, 6.5f, -6.4f) })
+        {
+            var go = new GameObject("Light");
+            go.transform.SetParent(stairs, false);
+            go.transform.localPosition = p;
+            var l = go.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = 4.5f;
+            l.intensity = 1.4f;
+            l.color = new Color(0.97f, 0.98f, 1f);
+            l.shadows = LightShadows.None;
+        }
+    }
+
+    /// <summary>
+    /// Невидимый пандус поверх ступеней лестничного тоннеля. Ступени 0,22 × 0,22 м мельче радиуса капсулы игрока:
+    /// она упирается в кромки и не поднимается. По пандусу (45°, ниже slopeLimit) можно идти вверх и вниз.
+    /// </summary>
+    static void AddStairRamp(Transform tunnel)
+    {
+        // Пролёт — 20 ступеней от пола (y = 0) до площадки (y = 4,4) вдоль локальной −Z; линия кромок
+        // идёт от (z = −1,18; y = 0) до (z = −5,58; y = 4,4). Верхняя грань пандуса лежит на этой линии.
+        const float rise = 4.4f, thickness = 0.1f;
+        var ramp = new GameObject("Stair_Ramp");
+        ramp.transform.SetParent(tunnel, false);
+        ramp.transform.localRotation = Quaternion.Euler(45f, 0f, 0f);
+        ramp.transform.localPosition = new Vector3(0f, rise / 2f, -1.18f - rise / 2f)
+            - ramp.transform.localRotation * Vector3.up * (thickness / 2f);
+        GameObjectUtility.SetStaticEditorFlags(ramp, StaticEditorFlags.BatchingStatic);
+        ramp.AddComponent<BoxCollider>().size = new Vector3(1.2f, thickness, rise * Mathf.Sqrt(2f));
+    }
+
+    /// <summary>Кухня закрыта потолком, солнце туда не попадает — точечный свет под каждой потолочной панелью.</summary>
+    static void AddKitchenLights(Transform kitchen)
+    {
+        var lights = new GameObject("Kitchen Lights").transform;
+        foreach (var panel in kitchen.GetComponentsInChildren<Transform>(true).Where(t => t.name.StartsWith("CeilingLight_")))
+        {
+            Bounds b = RendererBounds(panel, new Bounds(panel.position, Vector3.zero));
+            var go = new GameObject("Light_" + panel.name);
+            go.transform.SetParent(lights, false);
+            go.transform.position = new Vector3(b.center.x, b.min.y - 0.3f, b.center.z);
+            var l = go.AddComponent<Light>();
+            l.type = LightType.Point;
+            l.range = 5.5f;
+            l.intensity = 1.6f;
+            l.color = new Color(0.97f, 0.98f, 1f);
+            l.shadows = LightShadows.None;
+        }
+    }
 
     static GameObject Spawn(GameObject asset, string name)
     {
