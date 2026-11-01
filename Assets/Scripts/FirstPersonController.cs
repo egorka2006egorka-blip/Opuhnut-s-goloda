@@ -79,6 +79,7 @@ public class FirstPersonController : MonoBehaviour
     void Awake()
     {
         controller = GetComponent<CharacterController>();
+        if (GetComponent<PlayerHealth>() == null) gameObject.AddComponent<PlayerHealth>();
         if (cameraPivot != null)
             Pitch = NormalizeAngle(cameraPivot.localEulerAngles.x);
     }

@@ -28,7 +28,7 @@ public static class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 30;
+    const int BuildVersion = 31;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
 
     static CanteenSceneBuilder()
@@ -41,7 +41,7 @@ public static class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился (дверь к лестнице вниз из кухни, подъём по лестницам без застревания). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился (зомби: спавн, ходьба, урон от выстрелов). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -208,6 +208,9 @@ public static class CanteenSceneBuilder
             SetShotEffects(mp5, WeaponEffects.Profile.SMG, 0.9f, 2, 0.25f);
         }
 
+        // ---------- Зомби ----------
+        CreateZombieSpawner(floor);
+
         Selection.activeGameObject = player;
         Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
         EditorSceneManager.SaveScene(scene, ScenePath);
@@ -223,6 +226,50 @@ public static class CanteenSceneBuilder
     }
 
     // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Добавляет спавнер зомби в открытую сцену, не пересобирая её (старый спавнер заменяется).</summary>
+    [MenuItem("Tools/Canteen/Add Zombie Spawner")]
+    public static void AddZombieSpawnerToOpenScene()
+    {
+        Bounds floor = new Bounds(Vector3.zero, new Vector3(30f, 0f, 20f));
+        var canteen = GameObject.Find("Canteen");
+        if (canteen != null) floor = RendererBounds(FindChild(canteen.transform, "Floor"), floor);
+        else
+        {
+            var fpc = Object.FindAnyObjectByType<FirstPersonController>();
+            if (fpc != null) floor.center = fpc.transform.position;
+        }
+        var spawner = CreateZombieSpawner(floor);
+        if (spawner == null) return;
+        Selection.activeGameObject = spawner;
+        EditorSceneManager.MarkSceneDirty(spawner.scene);
+    }
+
+    /// <summary>Спавнер зомби: все модели Assets/Characters/Zombie*.glb, зона появления — пол столовой.</summary>
+    static GameObject CreateZombieSpawner(Bounds floor)
+    {
+        foreach (var old in Object.FindObjectsByType<ZombieSpawner>())
+            Object.DestroyImmediate(old.gameObject);
+
+        var prefabs = AssetDatabase.FindAssets("Zombie", new[] { "Assets/Characters" })
+            .Select(AssetDatabase.GUIDToAssetPath)
+            .Where(p => p.EndsWith(".glb", System.StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p).StartsWith("Zombie"))
+            .Distinct().OrderBy(p => p)
+            .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
+            .Where(a => a != null).ToArray();
+        if (prefabs.Length == 0)
+        {
+            Debug.LogWarning("CanteenSceneBuilder: в Assets/Characters нет моделей Zombie*.glb — спавнер зомби не создан.");
+            return null;
+        }
+
+        var go = new GameObject("ZombieSpawner");
+        var spawner = go.AddComponent<ZombieSpawner>();
+        spawner.zombiePrefabs = prefabs;
+        spawner.spawnArea = new Bounds(new Vector3(floor.center.x, floor.max.y + 0.3f, floor.center.z),
+            new Vector3(Mathf.Max(1f, floor.size.x - 2f), 1f, Mathf.Max(1f, floor.size.z - 2f)));
+        return go;
+    }
 
     static GameObject BuildPlayer(GameObject characterAsset, Vector3 spawn, Vector3 forward)
     {

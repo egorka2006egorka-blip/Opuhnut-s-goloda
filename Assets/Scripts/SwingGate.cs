@@ -29,7 +29,7 @@ public class SwingGate : MonoBehaviour
     public bool IsOpen { get; private set; }
 
     Quaternion[] closedRot;
-    Vector3[] closedPos, hinge;
+    Vector3[] closedPos, hinge, closedCenters;
     float[] dirs;
     float t; // 0 — закрыто, 1 — открыто
     Quaternion handleRest;
@@ -44,6 +44,29 @@ public class SwingGate : MonoBehaviour
         return null;
     }
 
+    /// <summary>Все калитки и двери сцены.</summary>
+    public static IReadOnlyList<SwingGate> All => all;
+
+    /// <summary>
+    /// Открывает закрытые двери, к створке которых точка pos ближе reach (по горизонтали), —
+    /// так зомби проходят через двери. Створки распахиваются от pos.
+    /// </summary>
+    public static void OpenNear(Vector3 pos, float reach)
+    {
+        foreach (var g in all)
+        {
+            if (g.IsOpen || g.closedCenters == null) continue;
+            bool near = false;
+            for (int i = 0; i < g.closedCenters.Length && !near; i++)
+            {
+                if (g.leaves[i] == null) continue;
+                Vector3 d = g.closedCenters[i] - pos;
+                near = Mathf.Abs(d.y) < 2.5f && new Vector2(d.x, d.z).sqrMagnitude < reach * reach;
+            }
+            if (near) g.Toggle(pos);
+        }
+    }
+
     void OnEnable() => all.Add(this);
     void OnDisable() => all.Remove(this);
 
@@ -54,9 +77,11 @@ public class SwingGate : MonoBehaviour
         closedPos = new Vector3[n];
         hinge = new Vector3[n];
         dirs = new float[n];
+        closedCenters = new Vector3[n];
         for (int i = 0; i < n; i++)
         {
             if (leaves[i] == null) continue;
+            closedCenters[i] = LeafCenter(leaves[i]);
             closedRot[i] = leaves[i].localRotation;
             closedPos[i] = leaves[i].localPosition;
             hinge[i] = hinges != null && i < hinges.Length ? hinges[i] : closedPos[i];
