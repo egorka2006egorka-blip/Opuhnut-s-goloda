@@ -9,12 +9,17 @@ using UnityEngine.AI;
 /// </summary>
 public class ZombieSpawner : MonoBehaviour
 {
+<<<<<<< HEAD
     [Tooltip("Модели зомби (Assets/Characters/Zombies/Models/Zombie_*.fbx). Для каждого нового зомби выбирается случайная.")]
     public GameObject[] zombiePrefabs;
     [Tooltip("Animator Controller зомби (Assets/Characters/Zombies/Animator/Zombie.controller, собирается через Tools → Zombies → Setup Animations).")]
     public RuntimeAnimatorController zombieAnimator;
     [Tooltip("Прах после смерти: хлопья пепла (Assets/Characters/Zombies/Materials/FX_Ash) и пыль (Assets/Effects/FX_Smoke).")]
     public Material ashFlakeMaterial, ashDustMaterial;
+=======
+    [Tooltip("Модели зомби (Assets/Characters/Zombie_*.glb). Для каждого нового зомби выбирается случайная.")]
+    public GameObject[] zombiePrefabs;
+>>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
     [Header("Количество")]
     public int maxAlive = 6;
@@ -47,8 +52,11 @@ public class ZombieSpawner : MonoBehaviour
     void Start()
     {
         path = new NavMeshPath();
+<<<<<<< HEAD
         Zombie.AshFlakeMaterial = ashFlakeMaterial;
         Zombie.AshDustMaterial = ashDustMaterial;
+=======
+>>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
         var fpc = FindAnyObjectByType<FirstPersonController>();
         if (fpc != null)
         {
@@ -127,7 +135,11 @@ public class ZombieSpawner : MonoBehaviour
         Vector3 look = player != null ? player.position - pos : Random.insideUnitSphere;
         look.y = 0f;
         if (look.sqrMagnitude < 1e-4f) look = Vector3.forward;
+<<<<<<< HEAD
         return Zombie.Create(prefab, zombieAnimator, pos, Quaternion.LookRotation(look), agentTypeId);
+=======
+        return Zombie.Create(prefab, pos, Quaternion.LookRotation(look), agentTypeId);
+>>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     }
 
     bool FindSpawnPoint(out Vector3 pos)
