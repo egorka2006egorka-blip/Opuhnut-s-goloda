@@ -35,6 +35,8 @@ public class WeaponEffects : MonoBehaviour
     public float cameraShake = 0.35f;
 
     [Header("Настройки")]
+    [Tooltip("Урон одной пули (у дроби — одной дробины). 0 — по типу оружия.")]
+    public float damage = 0f;
     public float damageForce = 6f;
     public int maxDecals = 60;
     [Tooltip("Ближе этого расстояния следы от пуль не создаются: вплотную они выглядят как серое облако перед камерой.")]
@@ -235,9 +237,22 @@ public class WeaponEffects : MonoBehaviour
         rot.z = new ParticleSystem.MinMaxCurve(-0.6f, 0.6f);
     }
 
+    /// <summary>Урон пули по умолчанию: пистолет — 2–4 попадания в тело зомби, дробовик — почти наверняка вплотную.</summary>
+    public float Damage => damage > 0f ? damage : profile switch
+    {
+        Profile.Rifle => 40f,
+        Profile.SMG => 22f,
+        Profile.Shotgun => 16f,
+        _ => 30f,
+    };
+
+    static readonly Color BloodColor = new Color(0.32f, 0.03f, 0.02f);
+
     /// <summary>Выстрел: эффекты у оружия + луч из камеры.</summary>
     public void Fire(Vector3 rayOrigin, Vector3 rayDir, Vector3 shooterVelocity, Collider ignore)
     {
+        // Коллайдеры на костях зомби двигает анимация в LateUpdate — подтягиваем их положение до трассировки.
+        Physics.SyncTransforms();
         // Звук: несколько вариантов на тип оружия, чтобы очередь не звучала как одна запись.
         audioSource.pitch = Random.Range(0.95f, 1.05f);
         audioSource.PlayOneShot(ShotClip(profile, Random.Range(0, 3)), 0.9f);
@@ -310,6 +325,16 @@ public class WeaponEffects : MonoBehaviour
         // Чем ближе предмет к камере, тем мельче и медленнее частицы, чтобы не лететь в камеру; вплотную их нет совсем.
         float f = Mathf.Clamp01(hit.distance / 2.5f);
 
+        // Попадание в зомби: урон, брызги крови, глухой звук; следов от пуль на теле нет.
+        var hitbox = hit.collider.GetComponent<ZombieHitbox>();
+        if (hitbox != null && hitbox.owner != null)
+        {
+            hitbox.owner.TakeHit(Damage, hit.point, dir, hitbox);
+            if (hit.distance >= 0.4f) EmitBlood(pos, Quaternion.LookRotation(Vector3.Reflect(dir, hit.normal) * 0.3f + hit.normal + dir * 0.6f), f);
+            if (sound) AudioSource.PlayClipAtPoint(ImpactClip(), hit.point, 0.45f);
+            return;
+        }
+
         if (hit.distance >= 0.4f)
         {
             if (metal) EmitSparks(pos, outward, f);
@@ -347,6 +372,20 @@ public class WeaponEffects : MonoBehaviour
         m.startSize = new ParticleSystem.MinMaxCurve(0.05f * f, 0.13f * f);
         m.startSpeed = new ParticleSystem.MinMaxCurve(0.4f * f, 2f * f);
         dustPS.Emit(Mathf.Max(1, Mathf.RoundToInt(count * f)));
+    }
+
+    /// <summary>Кровь: тёмно-красное облачко и капли, падающие на пол.</summary>
+    void EmitBlood(Vector3 pos, Quaternion rot, float f)
+    {
+        dustPS.transform.SetPositionAndRotation(pos, rot);
+        var m = dustPS.main;
+        Color mist = BloodColor; mist.a = 0.75f;
+        m.startColor = mist;
+        m.startLifetime = new ParticleSystem.MinMaxCurve(0.3f, 0.7f);
+        m.startSize = new ParticleSystem.MinMaxCurve(0.06f * f, 0.16f * f);
+        m.startSpeed = new ParticleSystem.MinMaxCurve(0.3f * f, 1.5f * f);
+        dustPS.Emit(Mathf.Max(1, Mathf.RoundToInt(4 * f)));
+        EmitDebris(pos, rot, f, BloodColor * 1.3f);
     }
 
     /// <summary>Осколки материала: мелкие кубики, падают и отскакивают.</summary>

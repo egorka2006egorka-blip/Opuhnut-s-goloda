@@ -1,0 +1,2009 @@
+{
+ "models": [
+  {
+   "model": "Zombie_v2",
+   "materials": [
+    {
+     "name": "ZSkin",
+     "baseColor": [
+      0.25,
+      0.258,
+      0.225,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": true
+    },
+    {
+     "name": "ZSkinBruise",
+     "baseColor": [
+      0.12,
+      0.1,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.75,
+     "vertexColor": false
+    },
+    {
+     "name": "ZSkinDark",
+     "baseColor": [
+      0.06,
+      0.055,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Wound",
+     "baseColor": [
+      0.15,
+      0.008,
+      0.008,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": true
+    },
+    {
+     "name": "Muscle",
+     "baseColor": [
+      0.28,
+      0.03,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.28,
+     "vertexColor": true
+    },
+    {
+     "name": "DriedBlood",
+     "baseColor": [
+      0.06,
+      0.008,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.65,
+     "vertexColor": false
+    },
+    {
+     "name": "Bone",
+     "baseColor": [
+      0.62,
+      0.56,
+      0.43,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": true
+    },
+    {
+     "name": "Teeth",
+     "baseColor": [
+      0.5,
+      0.42,
+      0.25,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "MouthIn",
+     "baseColor": [
+      0.05,
+      0.006,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Tongue",
+     "baseColor": [
+      0.2,
+      0.05,
+      0.055,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Eye",
+     "baseColor": [
+      0.56,
+      0.53,
+      0.4,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Iris",
+     "baseColor": [
+      0.32,
+      0.35,
+      0.33,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Hair",
+     "baseColor": [
+      0.03,
+      0.022,
+      0.015,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.85,
+     "vertexColor": false
+    },
+    {
+     "name": "Nail",
+     "baseColor": [
+      0.25,
+      0.2,
+      0.12,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Shirt",
+     "baseColor": [
+      0.33,
+      0.42,
+      0.54,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": true
+    },
+    {
+     "name": "ShirtDirt",
+     "baseColor": [
+      0.17,
+      0.15,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtBlood",
+     "baseColor": [
+      0.11,
+      0.012,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Button",
+     "baseColor": [
+      0.78,
+      0.78,
+      0.76,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Tie",
+     "baseColor": [
+      0.17,
+      0.02,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.6,
+     "vertexColor": false
+    },
+    {
+     "name": "Lanyard",
+     "baseColor": [
+      0.025,
+      0.055,
+      0.2,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Badge",
+     "baseColor": [
+      0.76,
+      0.76,
+      0.73,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pen",
+     "baseColor": [
+      0.02,
+      0.025,
+      0.08,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pants",
+     "baseColor": [
+      0.09,
+      0.09,
+      0.1,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.92,
+     "vertexColor": true
+    },
+    {
+     "name": "PantsDirt",
+     "baseColor": [
+      0.1,
+      0.085,
+      0.06,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Belt",
+     "baseColor": [
+      0.02,
+      0.014,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Buckle",
+     "baseColor": [
+      0.55,
+      0.55,
+      0.55,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Shoe",
+     "baseColor": [
+      0.012,
+      0.01,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Sole",
+     "baseColor": [
+      0.005,
+      0.005,
+      0.005,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Vein",
+     "baseColor": [
+      0.11,
+      0.095,
+      0.15,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Gum",
+     "baseColor": [
+      0.25,
+      0.06,
+      0.065,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    }
+   ]
+  },
+  {
+   "model": "Zombie_v2b",
+   "materials": [
+    {
+     "name": "ZSkin",
+     "baseColor": [
+      0.255,
+      0.262,
+      0.212,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": true
+    },
+    {
+     "name": "ZSkinBruise",
+     "baseColor": [
+      0.12,
+      0.1,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.75,
+     "vertexColor": false
+    },
+    {
+     "name": "ZSkinDark",
+     "baseColor": [
+      0.06,
+      0.055,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Wound",
+     "baseColor": [
+      0.15,
+      0.008,
+      0.008,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": true
+    },
+    {
+     "name": "Muscle",
+     "baseColor": [
+      0.28,
+      0.03,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.28,
+     "vertexColor": true
+    },
+    {
+     "name": "DriedBlood",
+     "baseColor": [
+      0.06,
+      0.008,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.65,
+     "vertexColor": false
+    },
+    {
+     "name": "Bone",
+     "baseColor": [
+      0.62,
+      0.56,
+      0.43,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": true
+    },
+    {
+     "name": "Teeth",
+     "baseColor": [
+      0.5,
+      0.42,
+      0.25,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "MouthIn",
+     "baseColor": [
+      0.05,
+      0.006,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Tongue",
+     "baseColor": [
+      0.2,
+      0.05,
+      0.055,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Eye",
+     "baseColor": [
+      0.56,
+      0.53,
+      0.4,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Iris",
+     "baseColor": [
+      0.32,
+      0.35,
+      0.33,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Hair",
+     "baseColor": [
+      0.14,
+      0.135,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.85,
+     "vertexColor": true
+    },
+    {
+     "name": "Nail",
+     "baseColor": [
+      0.25,
+      0.2,
+      0.12,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Shirt",
+     "baseColor": [
+      0.43,
+      0.48,
+      0.54,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": true
+    },
+    {
+     "name": "ShirtDirt",
+     "baseColor": [
+      0.17,
+      0.15,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtBlood",
+     "baseColor": [
+      0.11,
+      0.012,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Button",
+     "baseColor": [
+      0.78,
+      0.78,
+      0.76,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Tie",
+     "baseColor": [
+      0.02,
+      0.03,
+      0.085,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.6,
+     "vertexColor": false
+    },
+    {
+     "name": "Lanyard",
+     "baseColor": [
+      0.025,
+      0.055,
+      0.2,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Badge",
+     "baseColor": [
+      0.76,
+      0.76,
+      0.73,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pen",
+     "baseColor": [
+      0.02,
+      0.025,
+      0.08,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pants",
+     "baseColor": [
+      0.2,
+      0.2,
+      0.215,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.92,
+     "vertexColor": true
+    },
+    {
+     "name": "PantsDirt",
+     "baseColor": [
+      0.1,
+      0.085,
+      0.06,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Belt",
+     "baseColor": [
+      0.09,
+      0.05,
+      0.025,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Buckle",
+     "baseColor": [
+      0.55,
+      0.42,
+      0.18,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Shoe",
+     "baseColor": [
+      0.07,
+      0.035,
+      0.015,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Sole",
+     "baseColor": [
+      0.005,
+      0.005,
+      0.005,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Vein",
+     "baseColor": [
+      0.11,
+      0.095,
+      0.15,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Gum",
+     "baseColor": [
+      0.25,
+      0.06,
+      0.065,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Pupil",
+     "baseColor": [
+      0.02,
+      0.02,
+      0.02,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.2,
+     "vertexColor": false
+    },
+    {
+     "name": "IrisBlind",
+     "baseColor": [
+      0.52,
+      0.54,
+      0.52,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.15,
+     "vertexColor": false
+    },
+    {
+     "name": "Vest",
+     "baseColor": [
+      0.55,
+      0.55,
+      0.52,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Frame",
+     "baseColor": [
+      0.06,
+      0.04,
+      0.025,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Lens",
+     "baseColor": [
+      0.6,
+      0.65,
+      0.65,
+      0.25
+     ],
+     "metallic": 0.0,
+     "roughness": 0.05,
+     "vertexColor": false
+    },
+    {
+     "name": "Strap",
+     "baseColor": [
+      0.1,
+      0.06,
+      0.03,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.6,
+     "vertexColor": false
+    },
+    {
+     "name": "WatchFace",
+     "baseColor": [
+      0.7,
+      0.68,
+      0.6,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.2,
+     "vertexColor": false
+    },
+    {
+     "name": "Knit",
+     "baseColor": [
+      0.55,
+      0.5,
+      0.42,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.97,
+     "vertexColor": true
+    },
+    {
+     "name": "Chalk",
+     "baseColor": [
+      0.8,
+      0.8,
+      0.78,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": false
+    },
+    {
+     "name": "Patch",
+     "baseColor": [
+      0.11,
+      0.065,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "KButton",
+     "baseColor": [
+      0.06,
+      0.035,
+      0.018,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    }
+   ]
+  },
+  {
+   "model": "Zombie_v2b_vest",
+   "materials": [
+    {
+     "name": "ZSkin",
+     "baseColor": [
+      0.255,
+      0.262,
+      0.212,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": true
+    },
+    {
+     "name": "ZSkinBruise",
+     "baseColor": [
+      0.12,
+      0.1,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.75,
+     "vertexColor": false
+    },
+    {
+     "name": "ZSkinDark",
+     "baseColor": [
+      0.06,
+      0.055,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Wound",
+     "baseColor": [
+      0.15,
+      0.008,
+      0.008,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": true
+    },
+    {
+     "name": "Muscle",
+     "baseColor": [
+      0.28,
+      0.03,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.28,
+     "vertexColor": true
+    },
+    {
+     "name": "DriedBlood",
+     "baseColor": [
+      0.06,
+      0.008,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.65,
+     "vertexColor": false
+    },
+    {
+     "name": "Bone",
+     "baseColor": [
+      0.62,
+      0.56,
+      0.43,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": true
+    },
+    {
+     "name": "Teeth",
+     "baseColor": [
+      0.5,
+      0.42,
+      0.25,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "MouthIn",
+     "baseColor": [
+      0.05,
+      0.006,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Tongue",
+     "baseColor": [
+      0.2,
+      0.05,
+      0.055,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Eye",
+     "baseColor": [
+      0.56,
+      0.53,
+      0.4,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Iris",
+     "baseColor": [
+      0.32,
+      0.35,
+      0.33,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Hair",
+     "baseColor": [
+      0.14,
+      0.135,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.85,
+     "vertexColor": true
+    },
+    {
+     "name": "Nail",
+     "baseColor": [
+      0.25,
+      0.2,
+      0.12,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Shirt",
+     "baseColor": [
+      0.6,
+      0.56,
+      0.46,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": true
+    },
+    {
+     "name": "ShirtDirt",
+     "baseColor": [
+      0.17,
+      0.15,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtBlood",
+     "baseColor": [
+      0.11,
+      0.012,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Button",
+     "baseColor": [
+      0.78,
+      0.78,
+      0.76,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Tie",
+     "baseColor": [
+      0.18,
+      0.025,
+      0.04,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.55,
+     "vertexColor": false
+    },
+    {
+     "name": "Lanyard",
+     "baseColor": [
+      0.025,
+      0.055,
+      0.2,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Badge",
+     "baseColor": [
+      0.76,
+      0.76,
+      0.73,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pen",
+     "baseColor": [
+      0.02,
+      0.025,
+      0.08,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Pants",
+     "baseColor": [
+      0.24,
+      0.15,
+      0.08,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.92,
+     "vertexColor": true
+    },
+    {
+     "name": "PantsDirt",
+     "baseColor": [
+      0.1,
+      0.085,
+      0.06,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Belt",
+     "baseColor": [
+      0.09,
+      0.05,
+      0.025,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "Buckle",
+     "baseColor": [
+      0.55,
+      0.42,
+      0.18,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Shoe",
+     "baseColor": [
+      0.07,
+      0.035,
+      0.015,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Sole",
+     "baseColor": [
+      0.005,
+      0.005,
+      0.005,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Vein",
+     "baseColor": [
+      0.11,
+      0.095,
+      0.15,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Gum",
+     "baseColor": [
+      0.25,
+      0.06,
+      0.065,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Pupil",
+     "baseColor": [
+      0.02,
+      0.02,
+      0.02,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.2,
+     "vertexColor": false
+    },
+    {
+     "name": "IrisBlind",
+     "baseColor": [
+      0.52,
+      0.54,
+      0.52,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.15,
+     "vertexColor": false
+    },
+    {
+     "name": "Vest",
+     "baseColor": [
+      0.55,
+      0.55,
+      0.52,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": true
+    },
+    {
+     "name": "Frame",
+     "baseColor": [
+      0.06,
+      0.04,
+      0.025,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Lens",
+     "baseColor": [
+      0.6,
+      0.65,
+      0.65,
+      0.25
+     ],
+     "metallic": 0.0,
+     "roughness": 0.05,
+     "vertexColor": false
+    },
+    {
+     "name": "Strap",
+     "baseColor": [
+      0.1,
+      0.06,
+      0.03,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.6,
+     "vertexColor": false
+    },
+    {
+     "name": "WatchFace",
+     "baseColor": [
+      0.7,
+      0.68,
+      0.6,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.2,
+     "vertexColor": false
+    }
+   ]
+  },
+  {
+   "model": "Zombie_v3",
+   "materials": [
+    {
+     "name": "ZSkin",
+     "baseColor": [
+      0.25,
+      0.258,
+      0.225,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": true
+    },
+    {
+     "name": "ZSkinBruise",
+     "baseColor": [
+      0.12,
+      0.1,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.75,
+     "vertexColor": false
+    },
+    {
+     "name": "ZSkinDark",
+     "baseColor": [
+      0.06,
+      0.055,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Wound",
+     "baseColor": [
+      0.15,
+      0.008,
+      0.008,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": true
+    },
+    {
+     "name": "Muscle",
+     "baseColor": [
+      0.28,
+      0.03,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.28,
+     "vertexColor": true
+    },
+    {
+     "name": "DriedBlood",
+     "baseColor": [
+      0.06,
+      0.008,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.65,
+     "vertexColor": false
+    },
+    {
+     "name": "Bone",
+     "baseColor": [
+      0.62,
+      0.56,
+      0.43,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": true
+    },
+    {
+     "name": "Teeth",
+     "baseColor": [
+      0.5,
+      0.42,
+      0.25,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "MouthIn",
+     "baseColor": [
+      0.05,
+      0.006,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Tongue",
+     "baseColor": [
+      0.2,
+      0.05,
+      0.055,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Eye",
+     "baseColor": [
+      0.56,
+      0.53,
+      0.4,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Iris",
+     "baseColor": [
+      0.32,
+      0.35,
+      0.33,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Hair",
+     "baseColor": [
+      0.03,
+      0.022,
+      0.015,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.85,
+     "vertexColor": false
+    },
+    {
+     "name": "Nail",
+     "baseColor": [
+      0.25,
+      0.2,
+      0.12,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtDirt",
+     "baseColor": [
+      0.17,
+      0.15,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtBlood",
+     "baseColor": [
+      0.11,
+      0.012,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "PantsDirt",
+     "baseColor": [
+      0.1,
+      0.085,
+      0.06,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Shoe",
+     "baseColor": [
+      0.012,
+      0.01,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Sole",
+     "baseColor": [
+      0.005,
+      0.005,
+      0.005,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Boil",
+     "baseColor": [
+      0.33,
+      0.3,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.25,
+     "vertexColor": false
+    },
+    {
+     "name": "Gut",
+     "baseColor": [
+      0.33,
+      0.11,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.25,
+     "vertexColor": false
+    },
+    {
+     "name": "Claw",
+     "baseColor": [
+      0.09,
+      0.075,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "TShirt",
+     "baseColor": [
+      0.12,
+      0.125,
+      0.115,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": true
+    },
+    {
+     "name": "Jeans",
+     "baseColor": [
+      0.05,
+      0.075,
+      0.14,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": true
+    },
+    {
+     "name": "Strap",
+     "baseColor": [
+      0.015,
+      0.015,
+      0.018,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Vein",
+     "baseColor": [
+      0.11,
+      0.09,
+      0.17,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Gum",
+     "baseColor": [
+      0.25,
+      0.06,
+      0.065,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    }
+   ]
+  },
+  {
+   "model": "Zombie_v3b",
+   "materials": [
+    {
+     "name": "ZSkin",
+     "baseColor": [
+      0.25,
+      0.258,
+      0.225,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": true
+    },
+    {
+     "name": "ZSkinBruise",
+     "baseColor": [
+      0.12,
+      0.1,
+      0.125,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.75,
+     "vertexColor": false
+    },
+    {
+     "name": "ZSkinDark",
+     "baseColor": [
+      0.06,
+      0.055,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Wound",
+     "baseColor": [
+      0.15,
+      0.008,
+      0.008,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": true
+    },
+    {
+     "name": "Muscle",
+     "baseColor": [
+      0.28,
+      0.03,
+      0.035,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.28,
+     "vertexColor": true
+    },
+    {
+     "name": "DriedBlood",
+     "baseColor": [
+      0.06,
+      0.008,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.65,
+     "vertexColor": false
+    },
+    {
+     "name": "Bone",
+     "baseColor": [
+      0.62,
+      0.56,
+      0.43,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": true
+    },
+    {
+     "name": "Teeth",
+     "baseColor": [
+      0.5,
+      0.42,
+      0.25,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "MouthIn",
+     "baseColor": [
+      0.05,
+      0.006,
+      0.006,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Tongue",
+     "baseColor": [
+      0.2,
+      0.05,
+      0.055,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Eye",
+     "baseColor": [
+      0.56,
+      0.53,
+      0.4,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Iris",
+     "baseColor": [
+      0.32,
+      0.35,
+      0.33,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.12,
+     "vertexColor": false
+    },
+    {
+     "name": "Hair",
+     "baseColor": [
+      0.03,
+      0.022,
+      0.015,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.85,
+     "vertexColor": false
+    },
+    {
+     "name": "Nail",
+     "baseColor": [
+      0.25,
+      0.2,
+      0.12,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.5,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtDirt",
+     "baseColor": [
+      0.17,
+      0.15,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "ShirtBlood",
+     "baseColor": [
+      0.11,
+      0.012,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "PantsDirt",
+     "baseColor": [
+      0.1,
+      0.085,
+      0.06,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": false
+    },
+    {
+     "name": "Shoe",
+     "baseColor": [
+      0.012,
+      0.01,
+      0.01,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "Sole",
+     "baseColor": [
+      0.005,
+      0.005,
+      0.005,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.8,
+     "vertexColor": false
+    },
+    {
+     "name": "Boil",
+     "baseColor": [
+      0.33,
+      0.3,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.25,
+     "vertexColor": false
+    },
+    {
+     "name": "Gut",
+     "baseColor": [
+      0.33,
+      0.11,
+      0.11,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.25,
+     "vertexColor": false
+    },
+    {
+     "name": "Claw",
+     "baseColor": [
+      0.09,
+      0.075,
+      0.05,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.35,
+     "vertexColor": false
+    },
+    {
+     "name": "TShirt",
+     "baseColor": [
+      0.15,
+      0.04,
+      0.038,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.95,
+     "vertexColor": true
+    },
+    {
+     "name": "Jeans",
+     "baseColor": [
+      0.05,
+      0.075,
+      0.14,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.9,
+     "vertexColor": true
+    },
+    {
+     "name": "Strap",
+     "baseColor": [
+      0.015,
+      0.015,
+      0.018,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.7,
+     "vertexColor": false
+    },
+    {
+     "name": "Vein",
+     "baseColor": [
+      0.11,
+      0.09,
+      0.17,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.45,
+     "vertexColor": false
+    },
+    {
+     "name": "Gum",
+     "baseColor": [
+      0.25,
+      0.06,
+      0.065,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.4,
+     "vertexColor": false
+    },
+    {
+     "name": "Brain",
+     "baseColor": [
+      0.42,
+      0.23,
+      0.24,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.3,
+     "vertexColor": false
+    },
+    {
+     "name": "Tendril",
+     "baseColor": [
+      0.19,
+      0.04,
+      0.07,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.25,
+     "vertexColor": false
+    },
+    {
+     "name": "IrisBlind",
+     "baseColor": [
+      0.52,
+      0.54,
+      0.52,
+      1.0
+     ],
+     "metallic": 0.0,
+     "roughness": 0.15,
+     "vertexColor": false
+    }
+   ]
+  }
+ ]
+}
