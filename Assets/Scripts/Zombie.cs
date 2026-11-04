@@ -3,17 +3,10 @@ using UnityEngine;
 using UnityEngine.AI;
 
 /// <summary>
-<<<<<<< HEAD
 /// Зомби: идёт к игроку по NavMesh, если игрок сбоку или сзади — разворачивается на месте (клип Zombie Turn),
 /// вблизи атакует, получает урон от пуль (ZombieHitbox), вздрагивает от попаданий (верх тела), после смерти
 /// падает (клип смерти), темнеет и рассыпается в прах, который развеивает ветер.
 /// Анимации — клипы Mixamo через Animator Controller Zombie.controller (Humanoid, собирается ZombieAnimationSetup).
-=======
-/// Зомби: идёт к игроку по NavMesh, вблизи замахивается руками, получает урон от пуль (ZombieHitbox),
-/// вздрагивает от попаданий, после смерти падает, лежит и уходит под пол.
-/// Анимация процедурная (в моделях Zombie_*.glb только скелет в T-позе, без клипов):
-/// шаркающая походка с хромотой, наклон корпуса, вытянутые вперёд или висящие руки, скрюченные пальцы, отвисшая челюсть.
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 /// Создаётся через Zombie.Create (это делает ZombieSpawner).
 /// </summary>
 [DefaultExecutionOrder(50)]
@@ -38,7 +31,6 @@ public class Zombie : MonoBehaviour
 
     [Header("Движение")]
     public float walkSpeed = 1.1f;
-<<<<<<< HEAD
     public float attackRange = 1.3f;
     public float repathInterval = 0.25f;
     [Tooltip("Стоящий зомби, у которого цель дальше этого угла от взгляда, разворачивается на месте (клип Zombie Turn). На ходу поворачивает плавно.")]
@@ -58,19 +50,10 @@ public class Zombie : MonoBehaviour
     [Tooltip("Во сколько раз можно ускорить клип ходьбы. Скорость зомби ограничивается так, чтобы ступни не скользили: " +
              "не больше скорости шага клипа × это число.")]
     public float maxWalkAnimSpeed = 1.8f;
-=======
-    [Tooltip("Длина шага (м): чем меньше, тем чаще перебирает ногами.")]
-    public float strideLength = 0.8f;
-    public float attackRange = 1.3f;
-    [Tooltip("Длительность одного замаха (с).")]
-    public float attackInterval = 1.2f;
-    public float repathInterval = 0.25f;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
     [Header("Атака")]
     [Tooltip("Урон за один удар.")]
     public float attackDamage = 10f;
-<<<<<<< HEAD
     [Tooltip("Доля зомби, которые кусают (Zombie Neck Bite); остальные бьют руками (Zombie Attack).")]
     [Range(0f, 1f)] public float biteChance = 0.5f;
     [Tooltip("Момент удара внутри клипа атаки (доля длительности) — для Zombie Attack и Zombie Neck Bite.")]
@@ -91,23 +74,10 @@ public class Zombie : MonoBehaviour
 
     /// <summary>Материалы праха (задаёт ZombieSpawner): хлопья — мелкие тёмные частицы без бликов, пыль — мягкое облачко.</summary>
     public static Material AshFlakeMaterial, AshDustMaterial;
-=======
-    [Tooltip("Момент удара внутри замаха (доля attackInterval): руки опускаются на игрока.")]
-    [Range(0f, 1f)] public float hitMoment = 0.6f;
-    [Tooltip("С какого расстояния зомби открывает закрытую дверь перед собой (м).")]
-    public float doorOpenReach = 1.1f;
-
-    [Header("После смерти")]
-    public float fallDuration = 0.75f;
-    [Tooltip("Сколько тело лежит, прежде чем исчезнуть (с).")]
-    public float corpseTime = 10f;
-    public float sinkTime = 2.5f;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
     public float Health { get; private set; }
     public bool IsDead { get; private set; }
 
-<<<<<<< HEAD
     enum Act { Move, Turn, Attack }
 
     // Имена состояний — как в ZombieAnimationSetup.
@@ -116,28 +86,11 @@ public class Zombie : MonoBehaviour
     static readonly string[] HitStates = { "Hit1", "Hit2" };
     static readonly string[] DeathStates = { "Death1", "Death2" };
     static readonly int MoveParam = Animator.StringToHash("Move"), WalkSpeedParam = Animator.StringToHash("WalkSpeed");
-=======
-    class Arm
-    {
-        public bool right;
-        public Transform upper, fore, hand;
-        public readonly List<Transform> fingers = new List<Transform>();
-        public Vector3 curlAxisLocal;
-        public bool reach; // руки вытянуты вперёд; иначе висят
-    }
-
-    class Leg
-    {
-        public bool right;
-        public Transform thigh, shin, foot;
-    }
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
     static Transform player;
     static PlayerHealth playerHealth;
 
     Transform pivot, model;
-<<<<<<< HEAD
     Animator animator;
     NavMeshAgent agent;
     Transform hips, neck, head, jaw;
@@ -172,28 +125,6 @@ public class Zombie : MonoBehaviour
 
     /// <summary>Создаёт зомби из модели prefab в точке pos на NavMesh.</summary>
     public static Zombie Create(GameObject prefab, RuntimeAnimatorController controller, Vector3 pos, Quaternion rot, int agentTypeId)
-=======
-    NavMeshAgent agent;
-    Transform hips, spine, chest, neck, head, jaw;
-    readonly Arm[] arms = new Arm[2];
-    readonly Leg[] legs = new Leg[2];
-    readonly List<Transform> restBones = new List<Transform>();
-    readonly List<Quaternion> restRots = new List<Quaternion>();
-    readonly List<Collider> hitboxes = new List<Collider>();
-
-    // Индивидуальность: у каждого зомби своя походка.
-    float speedMul, lean, headTilt, limp, timeOffset;
-    int limpLeg;
-
-    float phase, move, attackWeight, attackClock, nextRepath;
-    float flinch, headFlinch, stagger;
-    Vector3 flinchDir = Vector3.forward, lastPos;
-    float deathClock;
-    Vector3 fallDir;
-
-    /// <summary>Создаёт зомби из модели prefab в точке pos на NavMesh.</summary>
-    public static Zombie Create(GameObject prefab, Vector3 pos, Quaternion rot, int agentTypeId)
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     {
         var root = new GameObject(prefab.name);
         root.SetActive(false); // агент и коллайдеры настраиваются до включения — без предупреждений NavMesh
@@ -204,17 +135,9 @@ public class Zombie : MonoBehaviour
         model.name = "Model";
         model.transform.localPosition = Vector3.zero;
         model.transform.localRotation = Quaternion.identity;
-<<<<<<< HEAD
 
         var z = root.AddComponent<Zombie>();
         z.Init(pivot, model.transform, controller, agentTypeId);
-=======
-        foreach (var a in model.GetComponentsInChildren<Animator>(true)) a.enabled = false;
-        foreach (var a in model.GetComponentsInChildren<Animation>(true)) a.enabled = false;
-
-        var z = root.AddComponent<Zombie>();
-        z.Init(pivot, model.transform, agentTypeId);
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
         root.SetActive(true);
         return z;
     }
@@ -224,11 +147,7 @@ public class Zombie : MonoBehaviour
 
     // ---------- Подготовка ----------
 
-<<<<<<< HEAD
     void Init(Transform pivotT, Transform modelT, RuntimeAnimatorController controller, int agentTypeId)
-=======
-    void Init(Transform pivotT, Transform modelT, int agentTypeId)
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     {
         pivot = pivotT;
         model = modelT;
@@ -260,7 +179,6 @@ public class Zombie : MonoBehaviour
             if (toeDir.sqrMagnitude > 1e-6f)
                 model.localRotation = Quaternion.Euler(0f, Vector3.SignedAngle(toeDir, pivot.forward, pivot.up), 0f) * model.localRotation;
         }
-<<<<<<< HEAD
 
         // Хитбоксы строим по T-позе — до того, как Animator начнёт двигать кости.
         hips = B("Hips"); neck = B("Neck"); head = B("Head"); jaw = B("Jaw");
@@ -281,70 +199,12 @@ public class Zombie : MonoBehaviour
         model.gameObject.AddComponent<ZombieAnimatorRelay>().owner = this;
         ReadClips(controller);
         if (controller == null) Debug.LogWarning("Zombie: не задан Animator Controller (ZombieSpawner.zombieAnimator) — зомби будет в T-позе.");
-=======
-        // Ступни — на пол: самая нижняя точка мешей на уровне корня.
-        float minY = float.MaxValue;
-        foreach (var smr in model.GetComponentsInChildren<SkinnedMeshRenderer>(true))
-        {
-            if (smr.sharedMesh == null) continue;
-            Bounds mb = smr.sharedMesh.bounds;
-            for (int i = 0; i < 8; i++)
-            {
-                Vector3 c = mb.center + Vector3.Scale(mb.extents, new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
-                minY = Mathf.Min(minY, pivot.InverseTransformPoint(smr.transform.TransformPoint(c)).y);
-            }
-        }
-        if (minY < 0.5f && minY > -0.5f) model.localPosition -= Vector3.up * minY;
-
-        // Какая сторона скелета физически справа.
-        Transform upR = B("UpperArm.R"), upL = B("UpperArm.L");
-        bool namesMatch = upR == null || upL == null || pivot.InverseTransformPoint(upR.position).x > pivot.InverseTransformPoint(upL.position).x;
-        string rs = namesMatch ? "R" : "L", ls = namesMatch ? "L" : "R";
-
-        hips = B("Hips"); spine = B("Spine"); chest = B("Chest"); neck = B("Neck"); head = B("Head"); jaw = B("Jaw");
-        for (int i = 0; i < 2; i++)
-        {
-            string s = i == 0 ? rs : ls;
-            var a = new Arm { right = i == 0, upper = B("UpperArm." + s), fore = B("Forearm." + s), hand = B("Hand." + s) };
-            foreach (var f in new[] { "Index", "Middle", "Ring", "Pinky" })
-                for (int j = 1; j <= 3; j++) { var fb = B(f + j + "." + s); if (fb != null) a.fingers.Add(fb); }
-            arms[i] = a.upper != null && a.fore != null && a.hand != null ? a : null;
-            var l = new Leg { right = i == 0, thigh = B("Thigh." + s), shin = B("Shin." + s), foot = B("Foot." + s) };
-            legs[i] = l.thigh != null && l.shin != null ? l : null;
-        }
-
-        foreach (var t in new[] { hips, spine, chest, neck, head, jaw }) AddRest(t);
-        foreach (var a in arms)
-        {
-            if (a == null) continue;
-            AddRest(a.upper); AddRest(a.fore); AddRest(a.hand);
-            foreach (var f in a.fingers) AddRest(f);
-            // Ось сгибания пальцев к ладони (в T-позе ладонь смотрит вниз).
-            var middle = B("Middle1." + (a.right ? rs : ls));
-            Vector3 F = middle != null ? (middle.position - a.hand.position).normalized : (a.hand.position - a.fore.position).normalized;
-            a.curlAxisLocal = a.hand.InverseTransformDirection(Vector3.Cross(F, -pivot.up).normalized);
-        }
-        foreach (var l in legs)
-            if (l != null) { AddRest(l.thigh); AddRest(l.shin); }
-
-        speedMul = Random.Range(0.8f, 1.3f);
-        lean = Random.Range(8f, 22f);
-        headTilt = Random.Range(-18f, 18f);
-        limpLeg = Random.Range(0, 2);
-        limp = Random.value < 0.6f ? Random.Range(0.3f, 0.8f) : 0f;
-        timeOffset = Random.Range(0f, 100f);
-        if (arms[0] != null) arms[0].reach = Random.value < 0.75f;
-        if (arms[1] != null) arms[1].reach = Random.value < 0.75f;
-
-        BuildHitboxes();
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
         var rb = gameObject.AddComponent<Rigidbody>();
         rb.isKinematic = true; // коллайдеры костей движутся вместе с анимацией
 
         agent = gameObject.AddComponent<NavMeshAgent>();
         agent.agentTypeID = agentTypeId;
-<<<<<<< HEAD
         agent.radius = 0.28f; // меньше радиуса запекания NavMesh (0,35): от стен держатся, а в проходе расходятся друг с другом
         agent.height = 1.8f;
         agent.baseOffset = 0f;
@@ -356,23 +216,11 @@ public class Zombie : MonoBehaviour
         agent.stoppingDistance = 0.1f; // останавливает переход к атаке (attackRange), а не агент
         agent.autoBraking = true;
         agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityObstacleAvoidance;
-=======
-        agent.radius = 0.32f;
-        agent.height = 1.8f;
-        agent.baseOffset = 0f;
-        agent.speed = walkSpeed * speedMul;
-        agent.acceleration = 6f;
-        agent.angularSpeed = 160f;
-        agent.stoppingDistance = attackRange * 0.8f;
-        agent.autoBraking = true;
-        agent.obstacleAvoidanceType = ObstacleAvoidanceType.MedQualityObstacleAvoidance;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
         agent.avoidancePriority = Random.Range(30, 70);
 
         lastPos = transform.position;
     }
 
-<<<<<<< HEAD
     void ReadClips(RuntimeAnimatorController controller)
     {
         if (controller == null) return;
@@ -389,13 +237,6 @@ public class Zombie : MonoBehaviour
         }
         for (int i = 0; i < attackLengths.Length; i++)
             if (attackLengths[i] <= 0f) attackLengths[i] = Mathf.Max(attackLengths[0], attackLengths[1], 1.2f);
-=======
-    void AddRest(Transform t)
-    {
-        if (t == null || restBones.Contains(t)) return;
-        restBones.Add(t);
-        restRots.Add(t.localRotation);
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     }
 
     static string Simplify(string s)
@@ -405,11 +246,7 @@ public class Zombie : MonoBehaviour
         return sb.ToString();
     }
 
-<<<<<<< HEAD
     void BuildHitboxes(System.Func<string, Transform> B)
-=======
-    void BuildHitboxes()
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     {
         // Туловище — от таза до шеи, шея — до головы.
         if (hips != null && neck != null) AddCapsule(hips, hips, neck, 0.17f, 1f, false);
@@ -435,7 +272,6 @@ public class Zombie : MonoBehaviour
             RegisterHitbox(go, sc, headMultiplier, true);
         }
 
-<<<<<<< HEAD
         foreach (var s in new[] { "L", "R" })
         {
             Transform upper = B("UpperArm." + s), fore = B("Forearm." + s), hand = B("Hand." + s);
@@ -447,20 +283,6 @@ public class Zombie : MonoBehaviour
             AddCapsule(thigh, thigh, shin, 0.09f, limbMultiplier, false);
             Transform end = foot != null && foot.IsChildOf(shin) ? foot : (shin.childCount > 0 ? shin.GetChild(0) : null);
             if (end != null) AddCapsule(shin, shin, end, 0.07f, limbMultiplier, false);
-=======
-        foreach (var a in arms)
-        {
-            if (a == null) continue;
-            AddCapsule(a.upper, a.upper, a.fore, 0.065f, limbMultiplier, false);
-            AddCapsule(a.fore, a.fore, a.hand, 0.055f, limbMultiplier, false);
-        }
-        foreach (var l in legs)
-        {
-            if (l == null) continue;
-            AddCapsule(l.thigh, l.thigh, l.shin, 0.09f, limbMultiplier, false);
-            Transform end = l.foot != null && l.foot.IsChildOf(l.shin) ? l.foot : (l.shin.childCount > 0 ? l.shin.GetChild(0) : null);
-            if (end != null) AddCapsule(l.shin, l.shin, end, 0.07f, limbMultiplier, false);
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
         }
     }
 
@@ -497,7 +319,6 @@ public class Zombie : MonoBehaviour
         return Mathf.Max(1e-4f, (Mathf.Abs(s.x) + Mathf.Abs(s.y) + Mathf.Abs(s.z)) / 3f);
     }
 
-<<<<<<< HEAD
     void Start()
     {
         if (!HasController) return;
@@ -511,8 +332,6 @@ public class Zombie : MonoBehaviour
         animator.Play(locoState, 0, Random.value);
     }
 
-=======
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     // ---------- Урон ----------
 
     /// <summary>Попадание пули: damage — урон пули (множитель части тела применяется здесь).</summary>
@@ -524,7 +343,6 @@ public class Zombie : MonoBehaviour
 
         Vector3 flat = Vector3.ProjectOnPlane(direction, Vector3.up);
         if (flat.sqrMagnitude > 1e-4f) flinchDir = flat.normalized;
-<<<<<<< HEAD
         if (part != null && part.isHead) headFlinch = 1f;
         stagger = 0.35f;
 
@@ -534,20 +352,10 @@ public class Zombie : MonoBehaviour
 
     bool HasController => animator != null && animator.runtimeAnimatorController != null;
 
-=======
-        flinch = Mathf.Min(1f, flinch + 0.5f);
-        if (part != null && part.isHead) headFlinch = 1f;
-        stagger = 0.35f;
-
-        if (Health <= 0f) Die();
-    }
-
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     void Die()
     {
         IsDead = true;
         deathClock = 0f;
-<<<<<<< HEAD
         foreach (var c in hitboxes) if (c != null) c.enabled = false;
         if (agent != null) agent.enabled = false;
         if (animator != null) animator.speed = 1f;
@@ -558,11 +366,6 @@ public class Zombie : MonoBehaviour
             animator.SetLayerWeight(1, 0f);
             animator.CrossFadeInFixedTime(DeathStates[d], 0.15f, 0, 0f);
         }
-=======
-        fallDir = flinchDir; // падает от стрелка
-        foreach (var c in hitboxes) if (c != null) c.enabled = false;
-        if (agent != null) agent.enabled = false;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     }
 
     // ---------- Поведение ----------
@@ -579,7 +382,6 @@ public class Zombie : MonoBehaviour
         }
         if (playerHealth == null && player != null) playerHealth = player.GetComponent<PlayerHealth>();
 
-<<<<<<< HEAD
         headFlinch = Mathf.MoveTowards(headFlinch, 0f, dt * 3f);
         stagger = Mathf.Max(0f, stagger - dt);
         turnCooldown = Mathf.Max(0f, turnCooldown - dt);
@@ -588,18 +390,12 @@ public class Zombie : MonoBehaviour
         Vector3 v = transform.position - lastPos; v.y = 0f;
         lastPos = transform.position;
         float speed = dt > 0f ? v.magnitude / dt : 0f;
-=======
-        flinch = Mathf.MoveTowards(flinch, 0f, dt * 3f);
-        headFlinch = Mathf.MoveTowards(headFlinch, 0f, dt * 3f);
-        stagger = Mathf.Max(0f, stagger - dt);
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
 
         // Закрытая дверь на пути — толкаем её (NavMesh проходит сквозь дверные проёмы).
         SwingGate.OpenNear(transform.position, doorOpenReach);
 
         bool playerDead = playerHealth != null && playerHealth.IsDead;
         bool inRange = false;
-<<<<<<< HEAD
         Vector3 toPlayer = Vector3.zero;
         if (player != null)
         {
@@ -779,52 +575,6 @@ public class Zombie : MonoBehaviour
             if (clipSign != turnClipSign) { turnClipSign = clipSign; EndAct(); return; }
         }
         transform.rotation = Quaternion.AngleAxis(yaw, Vector3.up) * transform.rotation;
-=======
-        if (player != null && playerDead)
-        {
-            // Игрок мёртв — зомби останавливаются возле него.
-            if (agent != null && agent.isOnNavMesh) agent.isStopped = true;
-        }
-        else if (player != null)
-        {
-            Vector3 to = player.position - transform.position;
-            float dy = to.y;
-            to.y = 0f;
-            inRange = to.magnitude <= attackRange && Mathf.Abs(dy) < 1.5f;
-
-            if (agent != null && agent.isOnNavMesh)
-            {
-                agent.speed = walkSpeed * speedMul * (stagger > 0f ? 0.2f : 1f);
-                agent.updateRotation = !inRange;
-                agent.isStopped = inRange;
-                if (!inRange && Time.time >= nextRepath)
-                {
-                    agent.SetDestination(player.position);
-                    nextRepath = Time.time + repathInterval;
-                }
-            }
-            if (inRange && to.sqrMagnitude > 1e-4f)
-                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(to), 220f * dt);
-        }
-
-        attackWeight = Mathf.MoveTowards(attackWeight, inRange ? 1f : 0f, dt * 3f);
-        float prevAttack = attackClock / attackInterval;
-        attackClock = attackWeight > 0f ? attackClock + dt : 0f;
-        float curAttack = attackClock / attackInterval;
-        // Удар: руки дошли до нижней точки замаха (раз за цикл), игрок рядом и не за стеной/дверью.
-        if (inRange && attackWeight > 0.6f && stagger <= 0f
-            && Mathf.Floor(curAttack - hitMoment) > Mathf.Floor(prevAttack - hitMoment)
-            && playerHealth != null && CanReach(player))
-            playerHealth.TakeDamage(attackDamage, transform.position);
-
-        // Шаг — по фактической скорости (упор в стену или других зомби не даёт «бежать на месте»).
-        Vector3 v = transform.position - lastPos; v.y = 0f;
-        lastPos = transform.position;
-        float speed = dt > 0f ? v.magnitude / dt : 0f;
-        move = Mathf.MoveTowards(move, Mathf.Clamp01(speed / Mathf.Max(0.1f, walkSpeed * speedMul)), dt * 3f);
-        phase += speed / strideLength * Mathf.PI * dt;
-        if (phase > Mathf.PI * 200f) phase -= Mathf.PI * 200f;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     }
 
     /// <summary>Между грудью зомби и игроком нет стены или закрытой двери.</summary>
@@ -844,7 +594,6 @@ public class Zombie : MonoBehaviour
         return true;
     }
 
-<<<<<<< HEAD
     // ---------- Прах ----------
 
     void UpdateCorpse(float dt)
@@ -1007,135 +756,5 @@ public class Zombie : MonoBehaviour
         // Попадание в голову — голову откидывает от выстрела.
         if (head != null && headFlinch > 0f)
             head.rotation = Quaternion.AngleAxis(headFlinch * 30f, Vector3.Cross(Vector3.up, flinchDir)) * head.rotation;
-=======
-    void UpdateCorpse(float dt)
-    {
-        deathClock += dt;
-        if (deathClock > corpseTime + sinkTime) { Destroy(gameObject); return; }
-    }
-
-    // ---------- Анимация ----------
-
-    void LateUpdate()
-    {
-        for (int i = 0; i < restBones.Count; i++) restBones[i].localRotation = restRots[i];
-
-        float death = 0f;
-        if (IsDead)
-        {
-            // Падение с ускорением, небольшой отскок о пол; потом тело медленно уходит под пол.
-            float k = Mathf.Clamp01(deathClock / fallDuration);
-            death = k * k;
-            float bounce = deathClock > fallDuration ? Mathf.Sin(Mathf.Clamp01((deathClock - fallDuration) / 0.25f) * Mathf.PI) * 0.05f : 0f;
-            float sink = Mathf.Clamp01((deathClock - corpseTime) / sinkTime);
-            Vector3 axis = Vector3.Cross(Vector3.up, fallDir);
-            pivot.rotation = Quaternion.AngleAxis(84f * death - bounce * 60f, axis) * transform.rotation;
-            pivot.position = transform.position + Vector3.up * (0.13f * death - 0.6f * sink);
-        }
-        else
-        {
-            // Покачивание корпуса из стороны в сторону и вниз-вверх в такт шагам.
-            float ph = phase;
-            pivot.localPosition = new Vector3(Mathf.Sin(ph) * 0.04f * move, -Mathf.Abs(Mathf.Sin(ph)) * 0.025f * move, 0f);
-            pivot.localRotation = Quaternion.Euler(0f, 0f, Mathf.Sin(ph) * 3f * move);
-        }
-
-        Vector3 R = pivot.right, U = pivot.up, F = pivot.forward;
-        float t = Time.time + timeOffset;
-        float alive = 1f - death;
-
-        // Корпус: наклон вперёд, скручивание в такт шагам, вздрагивание от попаданий.
-        float twist = Mathf.Sin(phase) * 7f * move * alive;
-        Vector3 flinchAxis = Vector3.Cross(Vector3.up, flinchDir);
-        if (hips != null) hips.rotation = Quaternion.AngleAxis(twist, U) * hips.rotation;
-        if (spine != null)
-            spine.rotation = Quaternion.AngleAxis(flinch * 14f, flinchAxis) *
-                             Quaternion.AngleAxis(lean * 0.5f * alive + Mathf.Sin(t * 1.3f) * 1.5f, R) * spine.rotation;
-        if (chest != null)
-            chest.rotation = Quaternion.AngleAxis(lean * 0.5f * alive + attackWeight * Mathf.Sin(AttackPhase(0f) * Mathf.PI * 2f) * 6f, R) *
-                             Quaternion.AngleAxis(-twist * 1.4f, U) * chest.rotation;
-        if (head != null)
-            head.rotation = Quaternion.AngleAxis(headFlinch * 35f, flinchAxis) *
-                            Quaternion.AngleAxis(-lean * 0.6f * alive + Mathf.Sin(t * 0.9f) * 4f + death * 25f, R) *
-                            Quaternion.AngleAxis(headTilt * (1f + death) + Mathf.Sin(t * 0.6f) * 5f, F) * head.rotation;
-        if (jaw != null)
-            jaw.rotation = Quaternion.AngleAxis(6f + Mathf.PerlinNoise(t * 1.7f, 0.3f) * 18f + attackWeight * 8f + death * 12f, R) * jaw.rotation;
-
-        foreach (var a in arms) if (a != null) PoseArm(a, R, U, F, t, death);
-        foreach (var l in legs) if (l != null) PoseLeg(l, R, death);
-    }
-
-    float AttackPhase(float offset) => Mathf.Repeat(attackClock / attackInterval + offset, 1f);
-
-    void PoseArm(Arm a, Vector3 R, Vector3 U, Vector3 F, float t, float death)
-    {
-        float s = a.right ? 1f : -1f;
-        // Мах рук в противофазе ногам; у вытянутых рук — лёгкое покачивание.
-        float swing = Mathf.Sin(phase + (a.right ? Mathf.PI : 0f)) * move;
-        float bob = Mathf.Sin(t * 1.4f + s) * 0.06f;
-
-        Vector3 upperDir, foreDir;
-        if (a.reach)
-        {
-            upperDir = F * 0.9f + U * (-0.2f + bob + swing * 0.05f) + R * (s * 0.17f);
-            foreDir = F + U * (0.03f + bob) - R * (s * 0.06f);
-        }
-        else
-        {
-            upperDir = -U + F * (0.12f + swing * 0.3f) + R * (s * 0.2f);
-            foreDir = -U + F * (0.35f + swing * 0.25f) + R * (s * 0.05f);
-        }
-
-        // Атака: замах вверх-вперёд и удар вниз, руки — вразнобой.
-        if (attackWeight > 0f)
-        {
-            float p = AttackPhase(a.right ? 0f : 0.18f);
-            float raise = p < 0.5f ? Mathf.SmoothStep(0f, 1f, p / 0.5f) : 1f - Mathf.SmoothStep(0f, 1f, (p - 0.5f) / 0.2f);
-            Vector3 up = F * 0.45f + U * 0.85f + R * (s * 0.25f);
-            Vector3 down = F + U * -0.55f - R * (s * 0.1f);
-            Vector3 atkUpper = Vector3.Slerp(down.normalized, up.normalized, raise);
-            Vector3 atkFore = Vector3.Slerp((F - U * 0.6f).normalized, (F * 0.3f + U).normalized, raise);
-            upperDir = Vector3.Slerp(upperDir.normalized, atkUpper, attackWeight);
-            foreDir = Vector3.Slerp(foreDir.normalized, atkFore, attackWeight);
-        }
-
-        // Смерть: руки безвольно падают на пол.
-        if (death > 0f)
-        {
-            Vector3 limp = (Vector3.down + R * (s * 0.6f)).normalized;
-            upperDir = Vector3.Slerp(upperDir.normalized, limp, death);
-            foreDir = Vector3.Slerp(foreDir.normalized, limp, death);
-        }
-
-        Aim(a.upper, a.fore, upperDir);
-        Aim(a.fore, a.hand, foreDir);
-        // Кисть свисает, пальцы скрючены.
-        a.hand.rotation = Quaternion.AngleAxis(a.reach ? 25f : 10f, R) * a.hand.rotation;
-        if (a.fingers.Count > 0)
-        {
-            Vector3 axis = a.hand.TransformDirection(a.curlAxisLocal);
-            float curl = 28f + Mathf.Sin(t * 2.1f + s) * 6f + attackWeight * 15f - death * 15f;
-            foreach (var f in a.fingers) f.rotation = Quaternion.AngleAxis(curl, axis) * f.rotation;
-        }
-    }
-
-    void PoseLeg(Leg l, Vector3 R, float death)
-    {
-        bool drag = limp > 0f && (limpLeg == 0) == l.right;
-        float ph = phase + (l.right ? 0f : Mathf.PI);
-        float m = move * (1f - death);
-        float swing = Mathf.Sin(ph) * 22f * (drag ? 1f - limp * 0.5f : 1f) * m;
-        // Колено сгибается, когда нога идёт вперёд; волочащаяся нога почти не сгибается.
-        float knee = Mathf.Max(0f, Mathf.Cos(ph)) * 38f * (drag ? 1f - limp : 1f) * m + 6f + death * 30f;
-        l.thigh.rotation = Quaternion.AngleAxis(-swing - knee * 0.3f, R) * l.thigh.rotation;
-        l.shin.rotation = Quaternion.AngleAxis(knee, R) * l.shin.rotation;
-    }
-
-    static void Aim(Transform bone, Transform child, Vector3 dir)
-    {
-        Vector3 cur = child.position - bone.position;
-        if (cur.sqrMagnitude < 1e-8f || dir.sqrMagnitude < 1e-8f) return;
-        bone.rotation = Quaternion.FromToRotation(cur, dir) * bone.rotation;
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     }
 }

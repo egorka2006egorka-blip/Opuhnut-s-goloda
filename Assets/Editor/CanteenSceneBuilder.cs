@@ -245,47 +245,30 @@ public static class CanteenSceneBuilder
         EditorSceneManager.MarkSceneDirty(spawner.scene);
     }
 
-<<<<<<< HEAD
     /// <summary>Спавнер зомби: все модели Assets/Characters/Zombies/Models/Zombie*.fbx, зона появления — пол столовой.</summary>
-=======
-    /// <summary>Спавнер зомби: все модели Assets/Characters/Zombie*.glb, зона появления — пол столовой.</summary>
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
     static GameObject CreateZombieSpawner(Bounds floor)
     {
         foreach (var old in Object.FindObjectsByType<ZombieSpawner>())
             Object.DestroyImmediate(old.gameObject);
 
-<<<<<<< HEAD
         var prefabs = AssetDatabase.FindAssets("Zombie", new[] { "Assets/Characters/Zombies/Models" })
             .Select(AssetDatabase.GUIDToAssetPath)
             .Where(p => p.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p).StartsWith("Zombie"))
-=======
-        var prefabs = AssetDatabase.FindAssets("Zombie", new[] { "Assets/Characters" })
-            .Select(AssetDatabase.GUIDToAssetPath)
-            .Where(p => p.EndsWith(".glb", System.StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p).StartsWith("Zombie"))
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
             .Distinct().OrderBy(p => p)
             .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
             .Where(a => a != null).ToArray();
         if (prefabs.Length == 0)
         {
-<<<<<<< HEAD
             Debug.LogWarning("CanteenSceneBuilder: в Assets/Characters/Zombies/Models нет моделей Zombie*.fbx — спавнер зомби не создан.");
-=======
-            Debug.LogWarning("CanteenSceneBuilder: в Assets/Characters нет моделей Zombie*.glb — спавнер зомби не создан.");
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
             return null;
         }
 
         var go = new GameObject("ZombieSpawner");
         var spawner = go.AddComponent<ZombieSpawner>();
         spawner.zombiePrefabs = prefabs;
-<<<<<<< HEAD
         spawner.zombieAnimator = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(ZombieAnimationSetup.ControllerPath);
         spawner.ashFlakeMaterial = AssetDatabase.LoadAssetAtPath<Material>(ZombieAnimationSetup.AshFlakePath);
         spawner.ashDustMaterial = AssetDatabase.LoadAssetAtPath<Material>(ZombieAnimationSetup.AshDustPath);
-=======
->>>>>>> 57c3a6d0097d54a86a69ea03903384d6e1f10e3d
         spawner.spawnArea = new Bounds(new Vector3(floor.center.x, floor.max.y + 0.3f, floor.center.z),
             new Vector3(Mathf.Max(1f, floor.size.x - 2f), 1f, Mathf.Max(1f, floor.size.z - 2f)));
         return go;
