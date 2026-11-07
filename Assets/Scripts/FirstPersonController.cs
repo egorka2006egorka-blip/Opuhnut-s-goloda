@@ -88,20 +88,20 @@ public class FirstPersonController : MonoBehaviour
 
     void Update()
     {
-        var keyboard = Keyboard.current;
+        // Пауза: управление отключено, курсор отдан меню (Esc обрабатывает PauseMenu).
+        if (PauseMenu.IsPaused) return;
         var mouse = Mouse.current;
 
-        // Курсор: Esc — отпустить, клик — снова захватить.
-        if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame) LockCursor(false);
+        // Курсор: клик — снова захватить (если его отпустили, например, сменой окна).
         if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
 
         bool lookActive = Cursor.lockState == CursorLockMode.Locked;
-        if (keyboard != null && lookActive && keyboard.vKey.wasPressedThisFrame) ThirdPerson = !ThirdPerson;
+        if (lookActive && Controls.WasPressed(GameAction.ToggleView)) ThirdPerson = !ThirdPerson;
 
         // Обзор мышью.
         if (mouse != null && lookActive)
         {
-            Vector2 delta = mouse.delta.ReadValue() * mouseSensitivity * LookSensitivityScale;
+            Vector2 delta = mouse.delta.ReadValue() * mouseSensitivity * LookSensitivityScale * GameSettings.MouseSensitivity;
             transform.Rotate(0f, delta.x, 0f, Space.Self);
             Pitch = Mathf.Clamp(Pitch - delta.y, minPitch, maxPitch);
         }
@@ -109,14 +109,14 @@ public class FirstPersonController : MonoBehaviour
         // Ввод движения.
         Vector2 input = Vector2.zero;
         bool sprint = false, jump = false;
-        if (keyboard != null && lookActive)
+        if (lookActive)
         {
-            if (keyboard.wKey.isPressed) input.y += 1f;
-            if (keyboard.sKey.isPressed) input.y -= 1f;
-            if (keyboard.dKey.isPressed) input.x += 1f;
-            if (keyboard.aKey.isPressed) input.x -= 1f;
-            sprint = keyboard.leftShiftKey.isPressed && input.y > 0f;
-            jump = keyboard.spaceKey.wasPressedThisFrame;
+            if (Controls.IsPressed(GameAction.MoveForward)) input.y += 1f;
+            if (Controls.IsPressed(GameAction.MoveBack)) input.y -= 1f;
+            if (Controls.IsPressed(GameAction.MoveRight)) input.x += 1f;
+            if (Controls.IsPressed(GameAction.MoveLeft)) input.x -= 1f;
+            sprint = Controls.IsPressed(GameAction.Sprint) && input.y > 0f;
+            jump = Controls.WasPressed(GameAction.Jump);
         }
         Locomotion(input, sprint, jump, Time.deltaTime);
         UpdateCamera();
@@ -211,7 +211,20 @@ public class FirstPersonController : MonoBehaviour
         shake = Mathf.Min(shake + amount, 1.5f);
     }
 
-    static void LockCursor(bool locked)
+    /// <summary>Мгновенно ставит игрока в точку с заданным поворотом (загрузка сохранения).</summary>
+    public void Teleport(Vector3 position, float yaw, float pitch)
+    {
+        if (controller == null) controller = GetComponent<CharacterController>();
+        bool was = controller.enabled;
+        controller.enabled = false;
+        transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+        controller.enabled = was;
+        Pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+        horizontalVelocity = Vector3.zero;
+        verticalVelocity = 0f;
+    }
+
+    public static void LockCursor(bool locked)
     {
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;

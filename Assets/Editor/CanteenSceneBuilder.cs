@@ -215,9 +215,10 @@ public static class CanteenSceneBuilder
         Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
         EditorSceneManager.SaveScene(scene, ScenePath);
 
-        // Сцена — первая в Build Settings.
+        // Сцена — первая в Build Settings (сразу после главного меню, если оно есть).
         var scenes = EditorBuildSettings.scenes.Where(s => s.path != ScenePath).ToList();
-        scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+        int menuIndex = scenes.FindIndex(s => s.path == MainMenuSceneSetup.ScenePath);
+        scenes.Insert(menuIndex >= 0 ? menuIndex + 1 : 0, new EditorBuildSettingsScene(ScenePath, true));
         EditorBuildSettings.scenes = scenes.ToArray();
         EditorPrefs.SetInt(VersionKey, BuildVersion);
         AssetDatabase.SaveAssets();

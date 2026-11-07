@@ -49,6 +49,14 @@ public class PlayerHealth : MonoBehaviour
         if (Health <= 0f) Die();
     }
 
+    /// <summary>Задаёт здоровье напрямую (загрузка сохранения).</summary>
+    public void SetHealth(float value)
+    {
+        if (IsDead) return;
+        Health = Mathf.Clamp(value, 1f, maxHealth);
+        shownHealth = Health;
+    }
+
     public void Heal(float amount)
     {
         if (IsDead) return;
@@ -75,10 +83,10 @@ public class PlayerHealth : MonoBehaviour
 
         if (IsDead)
         {
+            if (PauseMenu.IsPaused) return;
             deathClock += dt;
-            var kb = Keyboard.current;
             var mouse = Mouse.current;
-            if (deathClock > 1f && ((kb != null && kb.rKey.wasPressedThisFrame) || (mouse != null && mouse.leftButton.wasPressedThisFrame)))
+            if (deathClock > 1f && (Controls.WasPressed(GameAction.Reload) || (mouse != null && mouse.leftButton.wasPressedThisFrame)))
                 Restart();
             return;
         }
@@ -87,7 +95,7 @@ public class PlayerHealth : MonoBehaviour
             Health = Mathf.Min(maxHealth, Health + regenRate * dt);
     }
 
-    static void Restart()
+    public static void Restart()
     {
         var scene = SceneManager.GetActiveScene();
 #if UNITY_EDITOR
@@ -102,6 +110,7 @@ public class PlayerHealth : MonoBehaviour
 
     void OnGUI()
     {
+        if (SaveSystem.HideHud) return; // снимок экрана для сохранения — без интерфейса
         float frac = Mathf.Clamp01(Health / maxHealth);
 
         // Красные края экрана: вспышка при ударе и постоянное «кровавое» обрамление при низком здоровье.
@@ -169,7 +178,7 @@ public class PlayerHealth : MonoBehaviour
             if (deathClock > 1f)
             {
                 GUI.color = Color.white;
-                GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 40), "R или клик — начать заново", small);
+                GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 40), Controls.KeyName(GameAction.Reload) + " или клик — начать заново", small);
             }
         }
         GUI.color = Color.white;

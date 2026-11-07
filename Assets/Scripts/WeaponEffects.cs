@@ -255,7 +255,7 @@ public class WeaponEffects : MonoBehaviour
         Physics.SyncTransforms();
         // Звук: несколько вариантов на тип оружия, чтобы очередь не звучала как одна запись.
         audioSource.pitch = Random.Range(0.95f, 1.05f);
-        audioSource.PlayOneShot(ShotClip(profile, Random.Range(0, 3)), 0.9f);
+        audioSource.PlayOneShot(ShotClip(profile, Random.Range(0, 3)), 0.9f * GameSettings.EffectsVolume);
         if (ejectOnFire) EjectCasing(shooterVelocity, ignore);
 
         MuzzleEffects();
@@ -331,7 +331,7 @@ public class WeaponEffects : MonoBehaviour
         {
             hitbox.owner.TakeHit(Damage, hit.point, dir, hitbox);
             if (hit.distance >= 0.4f) EmitBlood(pos, Quaternion.LookRotation(Vector3.Reflect(dir, hit.normal) * 0.3f + hit.normal + dir * 0.6f), f);
-            if (sound) AudioSource.PlayClipAtPoint(ImpactClip(), hit.point, 0.45f);
+            if (sound) AudioSource.PlayClipAtPoint(ImpactClip(), hit.point, 0.45f * GameSettings.EffectsVolume);
             return;
         }
 
@@ -342,7 +342,7 @@ public class WeaponEffects : MonoBehaviour
             if (!metal) EmitDebris(pos, outward, f, surface);
         }
 
-        if (sound) AudioSource.PlayClipAtPoint(ImpactClip(), hit.point, 0.7f);
+        if (sound) AudioSource.PlayClipAtPoint(ImpactClip(), hit.point, 0.7f * GameSettings.EffectsVolume);
 
         if (hit.rigidbody != null && !hit.rigidbody.isKinematic)
             hit.rigidbody.AddForceAtPosition(dir * damageForce, hit.point, ForceMode.Impulse);

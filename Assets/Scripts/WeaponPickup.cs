@@ -85,6 +85,13 @@ public class WeaponPickup : MonoBehaviour
     /// <summary>Вставляет полный магазин (запас патронов не ограничен). Затвор остаётся как был.</summary>
     public void Reload() => Ammo = magazineSize;
 
+    /// <summary>Задаёт число патронов в магазине (загрузка сохранения).</summary>
+    public void SetAmmo(int ammo)
+    {
+        Ammo = Mathf.Clamp(ammo, 0, magazineSize);
+        SlideLocked = Ammo == 0 && !IsPumpAction;
+    }
+
     /// <summary>Добавляет один патрон (поштучное заряжание).</summary>
     public void AddShell() => Ammo = Mathf.Min(Ammo + 1, magazineSize);
 

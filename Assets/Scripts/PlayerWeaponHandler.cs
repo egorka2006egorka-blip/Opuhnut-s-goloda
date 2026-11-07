@@ -112,34 +112,35 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void Update()
     {
+        if (PauseMenu.IsPaused) return;
         bool locked = Cursor.lockState == CursorLockMode.Locked;
-        var keyboard = Keyboard.current;
         var mouse = Mouse.current;
 
         UpdateAim(mouse, locked);
 
         lookTarget = FindLookTarget();
         lookGate = lookTarget == null ? FindLookGate() : null;
-        if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookTarget != null)
+        bool interact = locked && Controls.WasPressed(GameAction.Interact);
+        if (interact && lookTarget != null)
             PickUp(lookTarget);
-        else if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookGate != null)
+        else if (interact && lookGate != null)
             lookGate.Toggle(transform.position);
-        else if (locked && keyboard != null && keyboard.gKey.wasPressedThisFrame && CurrentWeapon != null)
+        else if (locked && Controls.WasPressed(GameAction.Throw) && CurrentWeapon != null)
             Throw();
 
         UpdatePump();
-        if (locked && keyboard != null && keyboard.rKey.wasPressedThisFrame && CanReload())
+        if (locked && Controls.WasPressed(GameAction.Reload) && CanReload())
             StartReload();
         // Поштучное заряжание можно прервать выстрелом: дозаряжается текущий патрон, и рука возвращается на цевьё.
-        if (IsReloading && shellMode && locked && mouse != null && mouse.leftButton.wasPressedThisFrame)
+        if (IsReloading && shellMode && locked && Controls.WasPressed(GameAction.Fire))
             shellStop = true;
         UpdateReload();
 
         if (!locked) triggerBlocked = true;
-        else if (mouse != null && !mouse.leftButton.isPressed) triggerBlocked = false;
+        else if (!Controls.IsPressed(GameAction.Fire)) triggerBlocked = false;
         // Автоматическое оружие стреляет, пока зажата ЛКМ; остальное — по одному выстрелу на нажатие.
-        bool trigger = mouse != null && CurrentWeapon != null &&
-                       (CurrentWeapon.automatic ? mouse.leftButton.isPressed && !triggerBlocked : mouse.leftButton.wasPressedThisFrame);
+        bool trigger = CurrentWeapon != null &&
+                       (CurrentWeapon.automatic ? Controls.IsPressed(GameAction.Fire) && !triggerBlocked : Controls.WasPressed(GameAction.Fire));
         if (locked && trigger && pickupT >= 1f && !IsReloading && !IsPumping)
             Fire();
 
@@ -627,7 +628,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void UpdateAim(Mouse mouse, bool locked)
     {
-        bool aiming = locked && mouse != null && mouse.rightButton.isPressed && !IsReloading
+        bool aiming = locked && Controls.IsPressed(GameAction.Aim) && !IsReloading
                       && CurrentWeapon != null && pickupT >= 1f && hasAimPos
                       && (controller == null || !controller.ThirdPerson);
         AimWeight = Mathf.MoveTowards(AimWeight, aiming ? 1f : 0f, Time.deltaTime * aimSpeed * 0.5f);
@@ -716,6 +717,12 @@ public class PlayerWeaponHandler : MonoBehaviour
     {
         var r = w.GetComponentInChildren<Renderer>();
         return r != null ? r.bounds.center : w.transform.position;
+    }
+
+    /// <summary>Взять оружие в руки (загрузка сохранения).</summary>
+    public void Equip(WeaponPickup weapon)
+    {
+        if (weapon != null && weapon != CurrentWeapon) PickUp(weapon);
     }
 
     void PickUp(WeaponPickup weapon)
@@ -871,6 +878,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void OnGUI()
     {
+        if (SaveSystem.HideHud) return; // снимок экрана для сохранения — без интерфейса
         // Прицел.
         float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
         GUI.color = new Color(1f, 1f, 1f, 0.85f * (1f - AimWeight));
@@ -879,8 +887,9 @@ public class PlayerWeaponHandler : MonoBehaviour
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(16, Screen.height / 40), alignment = TextAnchor.MiddleCenter };
         if ((lookTarget != null || lookGate != null) && Cursor.lockState == CursorLockMode.Locked)
         {
-            string text = lookTarget != null ? "[E]  Подобрать: " + lookTarget.displayName
-                : lookGate.IsOpen ? "[E]  Закрыть" : "[E]  Открыть";
+            string key = "[" + Controls.KeyName(GameAction.Interact) + "]  ";
+            string text = lookTarget != null ? key + "Подобрать: " + lookTarget.displayName
+                : lookGate.IsOpen ? key + "Закрыть" : key + "Открыть";
             var rect = new Rect(cx - 300, cy + 40, 600, 40);
             GUI.color = new Color(0, 0, 0, 0.8f);
             GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), text, style);
@@ -906,7 +915,7 @@ public class PlayerWeaponHandler : MonoBehaviour
             GUI.Label(ammoRect, ammoText, ammoStyle);
         }
 
-        if (Cursor.lockState != CursorLockMode.Locked)
+        if (Cursor.lockState != CursorLockMode.Locked && !PauseMenu.IsPaused)
         {
             var small = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Screen.height / 60), alignment = TextAnchor.MiddleCenter };
             GUI.color = new Color(1f, 1f, 1f, 0.7f);
