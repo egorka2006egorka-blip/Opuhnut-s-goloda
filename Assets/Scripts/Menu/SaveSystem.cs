@@ -6,7 +6,7 @@ using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Сохранения в 6 слотах (Application.persistentDataPath/saves/slotN.json + slotN.png — снимок экрана):
-/// сцена, положение и взгляд игрока, здоровье, оружие (где лежит, сколько патронов, что в руках).
+/// сцена, положение и взгляд игрока, здоровье, инвентарь, оружие (где лежит, сколько патронов, что в руках).
 /// Зомби не сохраняются — после загрузки они появляются заново.
 /// </summary>
 public static class SaveSystem
@@ -27,7 +27,7 @@ public static class SaveSystem
     [Serializable]
     public class SaveData
     {
-        public int version = 2;
+        public int version = 3;
         public string scene;
         public string savedAt;
         public long savedTicks;
@@ -35,6 +35,10 @@ public static class SaveSystem
         public float yaw, pitch;
         public float health;
         public List<WeaponState> weapons = new List<WeaponState>();
+        /// <summary>Содержимое инвентаря (с версии 3; в старых сохранениях — стартовый набор).</summary>
+        public List<Inventory.Stack> items = new List<Inventory.Stack>();
+        /// <summary>Подобранные предметы, расставленные в сцене (по имени объекта).</summary>
+        public List<string> collectedLoot = new List<string>();
     }
 
     static string Dir => Path.Combine(Application.persistentDataPath, "saves");
@@ -140,6 +144,9 @@ public static class SaveSystem
             pitch = fpc.Pitch,
             health = health != null ? health.Health : 100f,
         };
+        var inventory = fpc.GetComponent<Inventory>();
+        if (inventory != null) data.items = inventory.Snapshot();
+        data.collectedLoot = new List<string>(ItemPickup.Collected);
         foreach (var w in WeaponPickup.All)
         {
             data.weapons.Add(new WeaponState
@@ -198,6 +205,15 @@ public static class SaveSystem
         fpc.Teleport(data.playerPosition, data.yaw, data.pitch);
         var health = fpc.GetComponent<PlayerHealth>();
         if (health != null) health.SetHealth(data.health);
+        var inventory = fpc.GetComponent<Inventory>();
+        if (inventory != null && data.version >= 3) inventory.Restore(data.items);
+        ItemPickup.Collected.Clear();
+        if (data.collectedLoot != null)
+        {
+            ItemPickup.Collected.AddRange(data.collectedLoot);
+            foreach (var p in UnityEngine.Object.FindObjectsByType<ItemPickup>(FindObjectsSortMode.None))
+                if (!p.spawned && data.collectedLoot.Contains(p.name)) UnityEngine.Object.Destroy(p.gameObject);
+        }
         var handler = fpc.GetComponent<PlayerWeaponHandler>();
 
         // Оружие сопоставляем по имени объекта и названию (одинаковые — по порядку).

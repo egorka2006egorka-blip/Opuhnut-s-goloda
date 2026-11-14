@@ -27,6 +27,12 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     WeaponPickup lookTarget;
     SwingGate lookGate;
+    ItemPickup lookItem;
+    Inventory inventory;
+    PropGrabber grabber;
+
+    /// <summary>Игрок смотрит на оружие, предмет для инвентаря или калитку — E занята ими (а не переносом предметов).</summary>
+    public bool HasInteractTarget => lookTarget != null || lookItem != null || lookGate != null;
     float pickupT = 1f;
     Vector3 pickupStartLocalPos;
     Quaternion pickupStartLocalRot;
@@ -107,6 +113,8 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void Start()
     {
+        inventory = GetComponent<Inventory>();
+        grabber = GetComponent<PropGrabber>();
         if (playerCamera != null) baseFov = playerCamera.fieldOfView;
     }
 
@@ -119,10 +127,13 @@ public class PlayerWeaponHandler : MonoBehaviour
         UpdateAim(mouse, locked);
 
         lookTarget = FindLookTarget();
-        lookGate = lookTarget == null ? FindLookGate() : null;
+        lookItem = lookTarget == null && playerCamera != null ? ItemPickup.FindLook(playerCamera.transform, transform, pickupRange, pickupAngle) : null;
+        lookGate = lookTarget == null && lookItem == null ? FindLookGate() : null;
         bool interact = locked && Controls.WasPressed(GameAction.Interact);
         if (interact && lookTarget != null)
             PickUp(lookTarget);
+        else if (interact && lookItem != null)
+            lookItem.Collect(inventory);
         else if (interact && lookGate != null)
             lookGate.Toggle(transform.position);
         else if (locked && Controls.WasPressed(GameAction.Throw) && CurrentWeapon != null)
@@ -141,7 +152,8 @@ public class PlayerWeaponHandler : MonoBehaviour
         // Автоматическое оружие стреляет, пока зажата ЛКМ; остальное — по одному выстрелу на нажатие.
         bool trigger = CurrentWeapon != null &&
                        (CurrentWeapon.automatic ? Controls.IsPressed(GameAction.Fire) && !triggerBlocked : Controls.WasPressed(GameAction.Fire));
-        if (locked && trigger && pickupT >= 1f && !IsReloading && !IsPumping)
+        // Пока в руках предмет (или ЛКМ ещё зажата после броска) — не стреляем.
+        if (locked && trigger && pickupT >= 1f && !IsReloading && !IsPumping && !(grabber != null && grabber.BlocksFire))
             Fire();
 
         UpdateHolder(mouse, locked);
@@ -149,7 +161,21 @@ public class PlayerWeaponHandler : MonoBehaviour
     }
 
     bool CanReload() =>
-        CurrentWeapon != null && pickupT >= 1f && !IsReloading && !IsPumping && CurrentWeapon.Ammo >= 0 && CurrentWeapon.Ammo < CurrentWeapon.magazineSize;
+        CurrentWeapon != null && pickupT >= 1f && !IsReloading && !IsPumping && CurrentWeapon.Ammo >= 0 && CurrentWeapon.Ammo < CurrentWeapon.magazineSize
+        && Reserve > 0;
+
+    /// <summary>Сколько патронов к оружию в руках лежит в инвентаре (без инвентаря — запас не ограничен).</summary>
+    public int Reserve => CurrentWeapon == null ? 0 : inventory == null ? int.MaxValue : inventory.Count(ItemDatabase.AmmoFor(CurrentWeapon));
+
+    /// <summary>Досыпает магазин патронами из инвентаря (сколько есть).</summary>
+    void FillMagazine()
+    {
+        var w = CurrentWeapon;
+        if (w == null) return;
+        if (inventory == null) { w.Reload(); return; }
+        int need = w.magazineSize - Mathf.Max(0, w.Ammo);
+        w.AddAmmo(inventory.Take(ItemDatabase.AmmoFor(w), need));
+    }
 
     void StartReload()
     {
@@ -193,7 +219,7 @@ public class PlayerWeaponHandler : MonoBehaviour
         {
             float tm = reloadClock / Mathf.Max(0.5f, ReloadTime);
             reloadBump = Mathf.Sin(Mathf.Clamp01(tm) * Mathf.PI);
-            if (!ammoFilled && tm >= 0.92f) { CurrentWeapon.Reload(); ammoFilled = true; }
+            if (!ammoFilled && tm >= 0.92f) { FillMagazine(); ammoFilled = true; }
             if (tm >= 1f)
             {
                 if (wasEmpty) { rackStage = true; reloadClock = 0f; reloadBump = 0f; }
@@ -235,10 +261,14 @@ public class PlayerWeaponHandler : MonoBehaviour
             return;
         }
         float t = reloadClock / Mathf.Max(0.2f, CurrentWeapon.shellInsertDuration);
-        if (!shellInserted && t >= ShellInsertAt) { CurrentWeapon.AddShell(); shellInserted = true; }
+        if (!shellInserted && t >= ShellInsertAt)
+        {
+            if (inventory == null || inventory.Take(ItemDatabase.AmmoFor(CurrentWeapon), 1) > 0) CurrentWeapon.AddShell();
+            shellInserted = true;
+        }
         if (t < 1f) return;
         reloadClock = 0f;
-        if (CurrentWeapon.Ammo >= CurrentWeapon.magazineSize || shellStop) shellFinishing = true;
+        if (CurrentWeapon.Ammo >= CurrentWeapon.magazineSize || shellStop || Reserve <= 0) shellFinishing = true;
         else { shellInserted = false; shellFirst = false; }
     }
 
@@ -271,7 +301,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void FinishReload()
     {
-        if (CurrentWeapon != null && !ammoFilled) CurrentWeapon.Reload();
+        if (CurrentWeapon != null && !ammoFilled) FillMagazine();
         EndReloadState();
     }
 
@@ -885,10 +915,11 @@ public class PlayerWeaponHandler : MonoBehaviour
         GUI.DrawTexture(new Rect(cx - 2, cy - 2, 4, 4), Texture2D.whiteTexture);
 
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(16, Screen.height / 40), alignment = TextAnchor.MiddleCenter };
-        if ((lookTarget != null || lookGate != null) && Cursor.lockState == CursorLockMode.Locked)
+        if ((lookTarget != null || lookItem != null || lookGate != null) && Cursor.lockState == CursorLockMode.Locked)
         {
             string key = "[" + Controls.KeyName(GameAction.Interact) + "]  ";
             string text = lookTarget != null ? key + "Подобрать: " + lookTarget.displayName
+                : lookItem != null ? key + "Подобрать: " + lookItem.Label
                 : lookGate.IsOpen ? key + "Закрыть" : key + "Открыть";
             var rect = new Rect(cx - 300, cy + 40, 600, 40);
             GUI.color = new Color(0, 0, 0, 0.8f);
@@ -907,7 +938,9 @@ public class PlayerWeaponHandler : MonoBehaviour
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.LowerLeft
             };
-            string ammoText = IsReloading && !ammoFilled ? "..." : ammo + " / " + CurrentWeapon.magazineSize;
+            // В магазине / в запасе (в инвентаре).
+            int reserve = Reserve;
+            string ammoText = IsReloading && !ammoFilled ? "..." : ammo + " / " + (reserve == int.MaxValue ? "∞" : reserve.ToString());
             var ammoRect = new Rect(24, Screen.height - 84, 400, 70);
             GUI.color = new Color(0, 0, 0, 0.8f);
             GUI.Label(new Rect(ammoRect.x + 2, ammoRect.y + 2, ammoRect.width, ammoRect.height), ammoText, ammoStyle);
@@ -915,7 +948,7 @@ public class PlayerWeaponHandler : MonoBehaviour
             GUI.Label(ammoRect, ammoText, ammoStyle);
         }
 
-        if (Cursor.lockState != CursorLockMode.Locked && !PauseMenu.IsPaused)
+        if (Cursor.lockState != CursorLockMode.Locked && !PauseMenu.IsPaused && !InventoryScreen.IsOpen)
         {
             var small = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Screen.height / 60), alignment = TextAnchor.MiddleCenter };
             GUI.color = new Color(1f, 1f, 1f, 0.7f);

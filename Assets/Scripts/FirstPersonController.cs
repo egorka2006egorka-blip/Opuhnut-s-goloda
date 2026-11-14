@@ -80,6 +80,9 @@ public class FirstPersonController : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
         if (GetComponent<PlayerHealth>() == null) gameObject.AddComponent<PlayerHealth>();
+        if (GetComponent<Inventory>() == null) gameObject.AddComponent<Inventory>();
+        if (GetComponent<InventoryScreen>() == null) gameObject.AddComponent<InventoryScreen>();
+        if (GetComponent<PropGrabber>() == null) gameObject.AddComponent<PropGrabber>();
         if (cameraPivot != null)
             Pitch = NormalizeAngle(cameraPivot.localEulerAngles.x);
     }
@@ -92,8 +95,8 @@ public class FirstPersonController : MonoBehaviour
         if (PauseMenu.IsPaused) return;
         var mouse = Mouse.current;
 
-        // Курсор: клик — снова захватить (если его отпустили, например, сменой окна).
-        if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
+        // Курсор: клик — снова захватить (если его отпустили, например, сменой окна). В инвентаре курсор нужен для меню.
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && !InventoryScreen.IsOpen) LockCursor(true);
 
         bool lookActive = Cursor.lockState == CursorLockMode.Locked;
         if (lookActive && Controls.WasPressed(GameAction.ToggleView)) ThirdPerson = !ThirdPerson;

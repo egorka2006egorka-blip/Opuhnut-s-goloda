@@ -26,8 +26,18 @@ public class Zombie : MonoBehaviour
 
     [Header("Здоровье")]
     public float maxHealth = 100f;
-    public float headMultiplier = 4f;
-    public float limbMultiplier = 0.6f;
+    [Tooltip("Множители урона по частям тела. Голова — с одного попадания убивает автомат, пистолету нужно два.")]
+    public float headMultiplier = 3f;
+    public float neckMultiplier = 1.6f;
+    public float torsoMultiplier = 0.85f;
+    [Tooltip("Плечо и бедро.")]
+    public float limbMultiplier = 0.5f;
+    [Tooltip("Предплечье и голень.")]
+    public float lowerLimbMultiplier = 0.35f;
+    [Tooltip("Урон по ногам, после которого зомби хромает в полную силу.")]
+    public float legDamageToLimp = 60f;
+    [Tooltip("Скорость хромающего зомби (доля от обычной).")]
+    [Range(0.2f, 1f)] public float limpSpeed = 0.5f;
 
     [Header("Движение")]
     public float walkSpeed = 1.1f;
@@ -52,8 +62,10 @@ public class Zombie : MonoBehaviour
     public float maxWalkAnimSpeed = 1.8f;
 
     [Header("Атака")]
-    [Tooltip("Урон за один удар.")]
-    public float attackDamage = 10f;
+    [Tooltip("Урон от удара руками (Zombie Attack).")]
+    public float attackDamage = 18f;
+    [Tooltip("Урон от укуса (Zombie Neck Bite) — больше, чем от удара.")]
+    public float biteDamage = 32f;
     [Tooltip("Доля зомби, которые кусают (Zombie Neck Bite); остальные бьют руками (Zombie Attack).")]
     [Range(0f, 1f)] public float biteChance = 0.5f;
     [Tooltip("Момент удара внутри клипа атаки (доля длительности) — для Zombie Attack и Zombie Neck Bite.")]
@@ -74,6 +86,12 @@ public class Zombie : MonoBehaviour
 
     /// <summary>Материалы праха (задаёт ZombieSpawner): хлопья — мелкие тёмные частицы без бликов, пыль — мягкое облачко.</summary>
     public static Material AshFlakeMaterial, AshDustMaterial;
+
+    [Header("Добыча")]
+    [Tooltip("Вероятность, что после смерти останутся патроны.")]
+    [Range(0f, 1f)] public float ammoDropChance = 0.45f;
+    [Tooltip("Вероятность, что после смерти останется аптечка.")]
+    [Range(0f, 1f)] public float medkitDropChance = 0.1f;
 
     public float Health { get; private set; }
     public bool IsDead { get; private set; }
@@ -114,6 +132,10 @@ public class Zombie : MonoBehaviour
     int attackIndex, preferredAttack;
     bool attackHitDone;
     float move, nextRepath, stagger, headFlinch;
+    float legDamage; // накопленный урон по ногам — от него зомби хромает
+
+    /// <summary>Множитель скорости от ранений в ноги: 1 — цел, limpSpeed — хромает в полную силу.</summary>
+    float LimpFactor => Mathf.Lerp(1f, limpSpeed, Mathf.Clamp01(legDamage / Mathf.Max(1f, legDamageToLimp)));
     float flankAngle, stuckClock, turnCooldown, unstickUntil;
     Vector3 flinchDir = Vector3.forward, lastPos;
     float deathClock, crumbleStart;
@@ -249,8 +271,8 @@ public class Zombie : MonoBehaviour
     void BuildHitboxes(System.Func<string, Transform> B)
     {
         // Туловище — от таза до шеи, шея — до головы.
-        if (hips != null && neck != null) AddCapsule(hips, hips, neck, 0.17f, 1f, false);
-        if (neck != null && head != null) AddCapsule(neck, neck, head, 0.07f, 1f, false);
+        if (hips != null && neck != null) AddCapsule(hips, hips, neck, 0.17f, torsoMultiplier, false, ZombieHitbox.Part.Torso);
+        if (neck != null && head != null) AddCapsule(neck, neck, head, 0.07f, neckMultiplier, false, ZombieHitbox.Part.Neck);
 
         // Голова — шар по габаритам меша головы (а если его нет — над костью Head).
         if (head != null)
@@ -269,25 +291,25 @@ public class Zombie : MonoBehaviour
             go.transform.position = center;
             var sc = go.AddComponent<SphereCollider>();
             sc.radius = radius / Scale(go.transform);
-            RegisterHitbox(go, sc, headMultiplier, true);
+            RegisterHitbox(go, sc, headMultiplier, true, ZombieHitbox.Part.Head);
         }
 
         foreach (var s in new[] { "L", "R" })
         {
             Transform upper = B("UpperArm." + s), fore = B("Forearm." + s), hand = B("Hand." + s);
-            if (upper != null && fore != null) AddCapsule(upper, upper, fore, 0.065f, limbMultiplier, false);
-            if (fore != null && hand != null) AddCapsule(fore, fore, hand, 0.055f, limbMultiplier, false);
+            if (upper != null && fore != null) AddCapsule(upper, upper, fore, 0.065f, limbMultiplier, false, ZombieHitbox.Part.UpperArm);
+            if (fore != null && hand != null) AddCapsule(fore, fore, hand, 0.055f, lowerLimbMultiplier, false, ZombieHitbox.Part.Forearm);
 
             Transform thigh = B("Thigh." + s), shin = B("Shin." + s), foot = B("Foot." + s);
             if (thigh == null || shin == null) continue;
-            AddCapsule(thigh, thigh, shin, 0.09f, limbMultiplier, false);
+            AddCapsule(thigh, thigh, shin, 0.09f, limbMultiplier, false, ZombieHitbox.Part.Thigh);
             Transform end = foot != null && foot.IsChildOf(shin) ? foot : (shin.childCount > 0 ? shin.GetChild(0) : null);
-            if (end != null) AddCapsule(shin, shin, end, 0.07f, limbMultiplier, false);
+            if (end != null) AddCapsule(shin, shin, end, 0.07f, lowerLimbMultiplier, false, ZombieHitbox.Part.Shin);
         }
     }
 
     /// <summary>Капсула от from до to, прикреплённая к кости parent.</summary>
-    void AddCapsule(Transform parent, Transform from, Transform to, float radius, float mult, bool isHead)
+    void AddCapsule(Transform parent, Transform from, Transform to, float radius, float mult, bool isHead, ZombieHitbox.Part part)
     {
         Vector3 p0 = from.position, p1 = to.position;
         Vector3 d = p1 - p0;
@@ -301,15 +323,16 @@ public class Zombie : MonoBehaviour
         c.direction = 2;
         c.radius = radius / s;
         c.height = (d.magnitude + radius * 2f) / s;
-        RegisterHitbox(go, c, mult, isHead);
+        RegisterHitbox(go, c, mult, isHead, part);
     }
 
-    void RegisterHitbox(GameObject go, Collider c, float mult, bool isHead)
+    void RegisterHitbox(GameObject go, Collider c, float mult, bool isHead, ZombieHitbox.Part part)
     {
         var hb = go.AddComponent<ZombieHitbox>();
         hb.owner = this;
         hb.multiplier = mult;
         hb.isHead = isHead;
+        hb.part = part;
         hitboxes.Add(c);
     }
 
@@ -340,6 +363,7 @@ public class Zombie : MonoBehaviour
         if (IsDead) return;
         float mult = part != null ? part.multiplier : 1f;
         Health -= damage * mult;
+        if (part != null && part.IsLeg) legDamage += damage * mult;
 
         Vector3 flat = Vector3.ProjectOnPlane(direction, Vector3.up);
         if (flat.sqrMagnitude > 1e-4f) flinchDir = flat.normalized;
@@ -356,6 +380,7 @@ public class Zombie : MonoBehaviour
     {
         IsDead = true;
         deathClock = 0f;
+        ItemPickup.RollZombieDrop(transform.position + Vector3.up * 0.6f, ammoDropChance, medkitDropChance);
         foreach (var c in hitboxes) if (c != null) c.enabled = false;
         if (agent != null) agent.enabled = false;
         if (animator != null) animator.speed = 1f;
@@ -450,7 +475,7 @@ public class Zombie : MonoBehaviour
                     attackHitDone = true;
                     // Удар достаёт, если игрок всё ещё рядом и не за стеной/дверью.
                     if (!playerDead && player != null && toPlayer.magnitude <= attackRange * 1.25f && playerHealth != null && CanReach(player))
-                        playerHealth.TakeDamage(attackDamage, transform.position);
+                        playerHealth.TakeDamage(attackIndex == 1 ? biteDamage : attackDamage, transform.position);
                 }
                 if (actClock >= actLength) EndAct();
                 break;
@@ -460,7 +485,7 @@ public class Zombie : MonoBehaviour
         {
             // На крутом повороте пути притормаживаем, пока не довернём, — не идём боком и не срезаем углы о стены.
             float facing = walking ? Mathf.Lerp(0.15f, 1f, Mathf.InverseLerp(100f, 30f, Mathf.Abs(angle))) : 1f;
-            agent.speed = moveSpeed * facing * (stagger > 0f ? 0.2f : 1f);
+            agent.speed = moveSpeed * facing * LimpFactor * (stagger > 0f ? 0.2f : 1f);
             UpdateStuck(dt, walking, speed);
         }
 

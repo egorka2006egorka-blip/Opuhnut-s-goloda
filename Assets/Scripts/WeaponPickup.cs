@@ -39,6 +39,8 @@ public class WeaponPickup : MonoBehaviour
 
     [Tooltip("Ёмкость магазина.")]
     public int magazineSize = 12;
+    [Tooltip("Какие патроны из инвентаря берутся при перезарядке (ammo_9mm, ammo_545, ammo_12g). Пусто — определяется по типу и названию оружия.")]
+    public string ammoType = "";
     [Tooltip("Автоматический огонь: стреляет, пока зажата ЛКМ. Иначе — один выстрел на нажатие.")]
     public bool automatic;
     [Tooltip("Интервал между выстрелами (с); 0 — по умолчанию из PlayerWeaponHandler.")]
@@ -82,8 +84,11 @@ public class WeaponPickup : MonoBehaviour
     /// <summary>Съёмный магазин (дочерний объект «Magazine»).</summary>
     public Transform magazine;
 
-    /// <summary>Вставляет полный магазин (запас патронов не ограничен). Затвор остаётся как был.</summary>
+    /// <summary>Вставляет полный магазин (без учёта запаса). Затвор остаётся как был.</summary>
     public void Reload() => Ammo = magazineSize;
+
+    /// <summary>Добавляет патроны в магазин (не больше ёмкости). Затвор остаётся как был.</summary>
+    public void AddAmmo(int count) => Ammo = Mathf.Clamp(Mathf.Max(0, Ammo) + count, 0, magazineSize);
 
     /// <summary>Задаёт число патронов в магазине (загрузка сохранения).</summary>
     public void SetAmmo(int ammo)

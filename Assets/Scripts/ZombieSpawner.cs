@@ -84,6 +84,9 @@ public class ZombieSpawner : MonoBehaviour
         void Ignore(Transform t) { if (t != null) markups.Add(new NavMeshBuildMarkup { root = t, ignoreFromBuild = true, applyToChildren = true }); }
         Ignore(player);
         foreach (var w in WeaponPickup.All) if (w != null) Ignore(w.transform);
+        // Мелкие предметы двигаются (их берут и бросают) — в NavMesh они не препятствия, иначе останутся «дыры».
+        foreach (var g in GrabbableProp.All) if (g != null) Ignore(g.transform);
+        foreach (var i in ItemPickup.All) if (i != null) Ignore(i.transform);
         foreach (var z in Zombie.All) if (z != null) Ignore(z.transform);
         // Створки дверей и калиток тоже: закрытая дверь при запекании перекрывала бы проём,
         // и зомби не могли бы пройти в другие помещения. Закрытые двери зомби открывают сами (Zombie → SwingGate.OpenNear).

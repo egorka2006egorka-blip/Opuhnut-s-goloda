@@ -6,7 +6,11 @@ using UnityEngine;
 /// </summary>
 public class ZombieHitbox : MonoBehaviour
 {
+    public enum Part { Head, Neck, Torso, UpperArm, Forearm, Thigh, Shin }
+
     public Zombie owner;
     public float multiplier = 1f;
     public bool isHead;
+    public Part part = Part.Torso;
+    public bool IsLeg => part == Part.Thigh || part == Part.Shin;
 }

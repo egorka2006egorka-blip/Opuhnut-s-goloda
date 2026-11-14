@@ -28,7 +28,7 @@ public static class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 31;
+    const int BuildVersion = 35;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
 
     static CanteenSceneBuilder()
@@ -41,7 +41,7 @@ public static class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился (зомби: спавн, ходьба, урон от выстрелов). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился (на улице ночь, свет в помещении приглушён; предметы можно брать и бросать, на столах аптечки и патроны). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -71,6 +71,7 @@ public static class CanteenSceneBuilder
         // ---------- Столовая ----------
         var canteen = Spawn(canteenAsset, "Canteen");
         MakeStaticWithColliders(canteen, "Outside_View", "LED_", "Bunting", "HangingSign", "Floor_Footprints", "AC_");
+        LevelPropsSetup.SetupGrabbableProps(canteen);
         var stairsUp = FindChild(canteen.transform, "Entrance2_StairTunnel_Up");
         if (stairsUp != null) AddStairRamp(stairsUp);
 
@@ -81,6 +82,7 @@ public static class CanteenSceneBuilder
         {
             var kitchen = Spawn(kitchenAsset, "UniversityKitchen");
             MakeStaticWithColliders(kitchen);
+            LevelPropsSetup.SetupGrabbableProps(kitchen);
             AddKitchenLights(kitchen.transform);
             BuildStairsDown(canteen.transform, kitchen.transform);
             // В проёме остаётся одна дверь — со стороны столовой.
@@ -120,6 +122,7 @@ public static class CanteenSceneBuilder
 
         // ---------- Свет ----------
         SetupLighting(floor);
+        NightSetup.Apply(canteen); // на улице ночь
 
         // ---------- Игрок ----------
         var player = BuildPlayer(characterAsset, spawn, forward);
@@ -207,6 +210,9 @@ public static class CanteenSceneBuilder
             mp5.rackRoll = 35f; // крен влево поднимает рукоять (она справа над цевьём) навстречу руке, идущей сверху
             SetShotEffects(mp5, WeaponEffects.Profile.SMG, 0.9f, 2, 0.25f);
         }
+
+        // ---------- Аптечки и патроны на столах ----------
+        LevelPropsSetup.PlaceLoot(spawn);
 
         // ---------- Зомби ----------
         CreateZombieSpawner(floor);

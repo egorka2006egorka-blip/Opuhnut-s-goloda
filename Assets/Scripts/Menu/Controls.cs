@@ -6,7 +6,7 @@ using UnityEngine.InputSystem.Controls;
 public enum GameAction
 {
     MoveForward, MoveBack, MoveLeft, MoveRight, Sprint, Jump,
-    Fire, Aim, Reload, Interact, Throw, ToggleView, QuickSave
+    Fire, Aim, Reload, Interact, Throw, ToggleView, QuickSave, Inventory
 }
 
 /// <summary>
@@ -22,13 +22,13 @@ public static class Controls
     static readonly string[] names =
     {
         "Вперёд", "Назад", "Влево", "Вправо", "Бег", "Прыжок",
-        "Стрельба", "Прицеливание", "Перезарядка", "Подобрать / открыть", "Бросить оружие", "Вид от 3-го лица", "Быстрое сохранение"
+        "Стрельба", "Прицеливание", "Перезарядка", "Подобрать / открыть", "Бросить оружие", "Вид от 3-го лица", "Быстрое сохранение", "Инвентарь"
     };
 
     static readonly int[] defaults =
     {
         (int)Key.W, (int)Key.S, (int)Key.A, (int)Key.D, (int)Key.LeftShift, (int)Key.Space,
-        MouseLeft, MouseRight, (int)Key.R, (int)Key.E, (int)Key.G, (int)Key.V, (int)Key.F5
+        MouseLeft, MouseRight, (int)Key.R, (int)Key.E, (int)Key.G, (int)Key.V, (int)Key.F5, (int)Key.Tab
     };
 
     static int[] bindings;

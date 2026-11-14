@@ -31,6 +31,15 @@ public static class MenuUI
     public static GUIStyle ButtonStyle { get { Ensure(); return button; } }
     /// <summary>Крупные кнопки главного меню.</summary>
     public static GUIStyle ButtonLarge { get { Ensure(); return buttonLarge; } }
+    /// <summary>Кнопка с текстом по центру (как вкладки настроек).</summary>
+    public static GUIStyle ButtonCenterStyle { get { Ensure(); return buttonCenter; } }
+
+    /// <summary>Вкладка: активная — с красной подложкой. true — по ней кликнули.</summary>
+    public static bool Tab(Rect r, string text, bool active)
+    {
+        Ensure();
+        return GUI.Button(r, text, active ? tabActive : buttonCenter);
+    }
 
     static Texture2D Solid(Color c)
     {
