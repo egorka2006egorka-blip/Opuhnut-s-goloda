@@ -3,7 +3,7 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Здоровье игрока: полоска внизу справа, красная вспышка по краям экрана при ударе,
+/// Здоровье игрока: красная вспышка по краям экрана при ударе (само здоровье видно только в инвентаре — HealthPanel),
 /// медленное восстановление, если какое-то время не получать урон.
 /// После смерти управление отключается; R или клик — начать заново (перезагрузка сцены).
 /// Добавляется к игроку автоматически (см. FirstPersonController.Awake).
@@ -21,14 +21,12 @@ public class PlayerHealth : MonoBehaviour
 
     float lastHitTime = -100f;
     float hitFlash;      // 0..1 — красная вспышка от удара
-    float shownHealth;   // плавно догоняет Health — «след» потерянного здоровья на полоске
     float deathClock;
     static Texture2D vignette;
 
     void Awake()
     {
         Health = maxHealth;
-        shownHealth = maxHealth;
     }
 
     /// <summary>Урон игроку. from — откуда ударили (для тряски камеры).</summary>
@@ -47,6 +45,13 @@ public class PlayerHealth : MonoBehaviour
             fpc.AddRecoil(1.5f, Mathf.Clamp(local.x, -1f, 1f) * 2f);
         }
         if (Health <= 0f) Die();
+    }
+
+    /// <summary>Задаёт здоровье напрямую (загрузка сохранения).</summary>
+    public void SetHealth(float value)
+    {
+        if (IsDead) return;
+        Health = Mathf.Clamp(value, 1f, maxHealth);
     }
 
     public void Heal(float amount)
@@ -71,14 +76,13 @@ public class PlayerHealth : MonoBehaviour
     {
         float dt = Time.deltaTime;
         hitFlash = Mathf.MoveTowards(hitFlash, 0f, dt * 1.5f);
-        shownHealth = shownHealth > Health ? Mathf.MoveTowards(shownHealth, Health, dt * maxHealth * 0.5f) : Health;
 
         if (IsDead)
         {
+            if (PauseMenu.IsPaused) return;
             deathClock += dt;
-            var kb = Keyboard.current;
             var mouse = Mouse.current;
-            if (deathClock > 1f && ((kb != null && kb.rKey.wasPressedThisFrame) || (mouse != null && mouse.leftButton.wasPressedThisFrame)))
+            if (deathClock > 1f && (Controls.WasPressed(GameAction.Reload) || (mouse != null && mouse.leftButton.wasPressedThisFrame)))
                 Restart();
             return;
         }
@@ -87,7 +91,7 @@ public class PlayerHealth : MonoBehaviour
             Health = Mathf.Min(maxHealth, Health + regenRate * dt);
     }
 
-    static void Restart()
+    public static void Restart()
     {
         var scene = SceneManager.GetActiveScene();
 #if UNITY_EDITOR
@@ -102,7 +106,28 @@ public class PlayerHealth : MonoBehaviour
 
     void OnGUI()
     {
+        if (SaveSystem.HideHud) return; // снимок экрана для сохранения — без интерфейса
         float frac = Mathf.Clamp01(Health / maxHealth);
+
+        // Полоса здоровья — снизу слева, над счётчиком патронов.
+        if (!IsDead && !StoryDirector.HideHud)
+        {
+            float bw = Mathf.Max(220f, Screen.height * 0.26f), bh = Mathf.Max(14f, Screen.height / 55f);
+            var bar = new Rect(24f, Screen.height - 84f - bh - 30f, bw, bh);
+            GUI.color = new Color(0f, 0f, 0f, 0.65f);
+            GUI.DrawTexture(new Rect(bar.x - 3f, bar.y - 3f, bar.width + 6f, bar.height + 6f), Texture2D.whiteTexture);
+            Color fill = Color.Lerp(new Color(0.85f, 0.12f, 0.08f), new Color(0.35f, 0.8f, 0.3f), Mathf.InverseLerp(0.25f, 0.8f, frac));
+            if (frac < 0.25f) fill *= 0.75f + 0.25f * Mathf.Sin(Time.time * 8f);
+            fill.a = 1f;
+            GUI.color = fill;
+            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * frac, bar.height), Texture2D.whiteTexture);
+            var hpStyle = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Mathf.RoundToInt(bh * 0.9f)), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
+            string hp = "ЗДОРОВЬЕ  " + Mathf.CeilToInt(Health) + " / " + Mathf.RoundToInt(maxHealth);
+            GUI.color = new Color(0f, 0f, 0f, 0.8f);
+            GUI.Label(new Rect(bar.x + 7f, bar.y - bh * 1.6f + 1f, bw, bh * 1.6f), hp, hpStyle);
+            GUI.color = Color.white;
+            GUI.Label(new Rect(bar.x + 6f, bar.y - bh * 1.6f, bw, bh * 1.6f), hp, hpStyle);
+        }
 
         // Красные края экрана: вспышка при ударе и постоянное «кровавое» обрамление при низком здоровье.
         float low = Mathf.Clamp01((0.35f - frac) / 0.35f);
@@ -114,42 +139,6 @@ public class PlayerHealth : MonoBehaviour
             GUI.color = new Color(0.7f, 0f, 0f, vig);
             GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Vignette());
         }
-
-        // Полоска здоровья — снизу справа.
-        float w = Mathf.Clamp(Screen.width * 0.22f, 200f, 420f);
-        float h = Mathf.Max(16f, Screen.height / 45f);
-        float x = Screen.width - w - 24f, y = Screen.height - h - 28f;
-
-        var label = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = Mathf.Max(14, Screen.height / 50),
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.LowerLeft
-        };
-        string text = "ЗДОРОВЬЕ  " + Mathf.CeilToInt(Health);
-        var textRect = new Rect(x, y - label.fontSize - 10f, w, label.fontSize + 8f);
-        GUI.color = new Color(0, 0, 0, 0.8f);
-        GUI.Label(new Rect(textRect.x + 2, textRect.y + 2, textRect.width, textRect.height), text, label);
-        GUI.color = Color.white;
-        GUI.Label(textRect, text, label);
-
-        // Рамка и фон.
-        GUI.color = new Color(0f, 0f, 0f, 0.75f);
-        GUI.DrawTexture(new Rect(x - 3, y - 3, w + 6, h + 6), Texture2D.whiteTexture);
-        GUI.color = new Color(0.25f, 0.05f, 0.05f, 0.9f);
-        GUI.DrawTexture(new Rect(x, y, w, h), Texture2D.whiteTexture);
-        // След потерянного здоровья.
-        GUI.color = new Color(1f, 0.85f, 0.4f, 0.9f);
-        GUI.DrawTexture(new Rect(x, y, w * Mathf.Clamp01(shownHealth / maxHealth), h), Texture2D.whiteTexture);
-        // Текущее здоровье: зелёный → жёлтый → красный.
-        Color barColor = frac > 0.5f
-            ? Color.Lerp(new Color(0.95f, 0.8f, 0.15f), new Color(0.25f, 0.85f, 0.3f), (frac - 0.5f) * 2f)
-            : Color.Lerp(new Color(0.9f, 0.15f, 0.1f), new Color(0.95f, 0.8f, 0.15f), frac * 2f);
-        GUI.color = barColor;
-        GUI.DrawTexture(new Rect(x, y, w * frac, h), Texture2D.whiteTexture);
-        // Блик сверху.
-        GUI.color = new Color(1f, 1f, 1f, 0.18f);
-        GUI.DrawTexture(new Rect(x, y, w * frac, h * 0.35f), Texture2D.whiteTexture);
 
         if (IsDead)
         {
@@ -169,7 +158,7 @@ public class PlayerHealth : MonoBehaviour
             if (deathClock > 1f)
             {
                 GUI.color = Color.white;
-                GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 40), "R или клик — начать заново", small);
+                GUI.Label(new Rect(0, Screen.height * 0.52f, Screen.width, 40), Controls.KeyName(GameAction.Reload) + " или клик — начать заново", small);
             }
         }
         GUI.color = Color.white;

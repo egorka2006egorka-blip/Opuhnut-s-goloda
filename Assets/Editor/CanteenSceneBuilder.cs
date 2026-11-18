@@ -8,11 +8,12 @@ using UnityEngine.Rendering;
 
 /// <summary>
 /// Собирает игровую сцену Assets/Scenes/Canteen.unity: столовая, игрок от первого лица (MainCharacter),
-/// пистолет на полу, свет. Запускается автоматически один раз, если сцены ещё нет,
-/// и вручную через меню Tools → Canteen → Rebuild Scene.
+/// пистолет на полу, остальное оружие — товар на прилавке у продавщицы, подвал с боссом, свет.
+/// Запускается автоматически один раз, если сцены ещё нет, и вручную через меню Tools → Canteen → Rebuild Scene.
+/// Подвал, босс и магазин — в CanteenSceneBuilder.Boss.cs.
 /// </summary>
 [InitializeOnLoad]
-public static class CanteenSceneBuilder
+public static partial class CanteenSceneBuilder
 {
     const string ScenePath = "Assets/Scenes/Canteen.unity";
     const string CanteenPath = "Assets/Models location/Canteen_LowPoly.glb";
@@ -28,8 +29,10 @@ public static class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 31;
+    const int BuildVersion = 38;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
+    /// <summary>Сцена есть и собрана текущей версией сборщика.</summary>
+    public static bool SceneUpToDate => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 1) >= BuildVersion;
 
     static CanteenSceneBuilder()
     {
@@ -39,9 +42,9 @@ public static class CanteenSceneBuilder
         SessionState.SetBool(AutoBuildKey, true);
         EditorApplication.delayCall += () =>
         {
-            if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+            if (EditorApplication.isPlayingOrWillChangePlaymode || SceneUpToDate) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился (зомби: спавн, ходьба, урон от выстрелов). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился: добавлен сюжет «Пересдача»: катсцены и озвученные диалоги, Галя за прилавком, волны зомби, Декан в подвале, его лом можно взять в руки и сбить им замок клетки с Шапиком. Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -71,18 +74,24 @@ public static class CanteenSceneBuilder
         // ---------- Столовая ----------
         var canteen = Spawn(canteenAsset, "Canteen");
         MakeStaticWithColliders(canteen, "Outside_View", "LED_", "Bunting", "HangingSign", "Floor_Footprints", "AC_");
+        LevelPropsSetup.SetupGrabbableProps(canteen);
         var stairsUp = FindChild(canteen.transform, "Entrance2_StairTunnel_Up");
         if (stairsUp != null) AddStairRamp(stairsUp);
 
         // ---------- Кухня ----------
         // Модель кухни сделана в координатах столовой: в начале координат её передняя стена
         // встаёт вплотную к задней стене столовой, а её дверь совпадает с дверью за калиткой.
+        BasementInfo basement = default;
+        Transform stairsDown = null;
         if (kitchenAsset != null)
         {
             var kitchen = Spawn(kitchenAsset, "UniversityKitchen");
             MakeStaticWithColliders(kitchen);
+            LevelPropsSetup.SetupGrabbableProps(kitchen);
             AddKitchenLights(kitchen.transform);
-            BuildStairsDown(canteen.transform, kitchen.transform);
+            stairsDown = BuildStairsDown(canteen.transform, kitchen.transform);
+            // ---------- Подвал (арена босса) — под кухней, второй пролёт лестницы ----------
+            basement = BuildBasement(canteen.transform, stairsDown);
             // В проёме остаётся одна дверь — со стороны столовой.
             FindChild(kitchen.transform, "Door_ToCanteen")?.gameObject.SetActive(false);
         }
@@ -120,6 +129,7 @@ public static class CanteenSceneBuilder
 
         // ---------- Свет ----------
         SetupLighting(floor);
+        NightSetup.Apply(canteen); // на улице ночь
 
         // ---------- Игрок ----------
         var player = BuildPlayer(characterAsset, spawn, forward);
@@ -128,17 +138,18 @@ public static class CanteenSceneBuilder
         Vector3 right = Vector3.Cross(Vector3.up, forward);
         BuildPistol(pistolAsset, spawn + forward * 4.5f + right * 0.35f, forward, floorY);
 
-        // ---------- Автомат и дробовик — в других частях зала ----------
+        // ---------- Остальное оружие — товар на прилавке у продавщицы (без прилавка — на полу, как раньше) ----------
         Physics.SyncTransforms();
+        var shop = FindShopSpots(canteen.transform, floor);
         if (rifleAsset != null)
         {
-            var p = GroundPoint(spawn + forward * 10f - right * 5f, floor, floorY);
+            var p = shop.ok ? shop.gunPos[3] : GroundPoint(spawn + forward * 10f - right * 5f, floor, floorY);
             // Правая рука — на пистолетной рукояти (z −0,09…−0,03), левая — снизу на заднем краю цевья (z 0,18…0,35).
             // Автомат держится близко к лицу: плечо модели на 0,22 м позади камеры, рука ~0,65 м —
             // при большем выносе левая рука не дотягивается до цевья.
             var rifle = BuildLongGun(rifleAsset, "AssaultRifle", "Автомат", 30, "BoltCarrier", "Body",
                 new Vector3(0.03f, -0.08f, -0.062f), new Vector3(-0.012f, -0.03f, 0.20f), new Vector3(0.07f, -0.13f, 0.1f),
-                0.04f, 0f, p, Quaternion.Euler(0f, -60f, 0f) * forward, p.y,
+                0.04f, 0f, p, shop.ok ? shop.along : Quaternion.Euler(0f, -60f, 0f) * forward, p.y,
                 // Линия прицеливания — по верху целика (z 0,145, y 0,071) над мушкой (z 0,52, y 0,076).
                 aimPointPos: new Vector3(0f, 0.073f, 0.145f),
                 // Рукоять затвора сбоку на BoltCarrier.
@@ -149,29 +160,31 @@ public static class CanteenSceneBuilder
             rifle.reloadDuration = 2.4f;
             rifle.stowMagazine = true;
             SetShotEffects(rifle, WeaponEffects.Profile.Rifle, 1.35f, 3, 0.45f);
+            PutOnSale(rifle, shop, 3, 100);
         }
         if (shotgunAsset != null)
         {
-            var p = GroundPoint(spawn + forward * 7f + right * 6f, floor, floorY);
+            var p = shop.ok ? shop.gunPos[2] : GroundPoint(spawn + forward * 7f + right * 6f, floor, floorY);
             // Правая рука — на шейке приклада (z ≈ −0,085, у спуска), левая — снизу на цевье (цевьё z 0,235…0,46).
             // Держим так же близко, как автомат, иначе левая рука не дотянется до цевья.
             // Дуло: центр Body по высоте занижен прикладом (−0,04), ствол на y ≈ 0,044 → смещение +0,084.
             var shotgun = BuildLongGun(shotgunAsset, "PumpShotgun", "Дробовик", 5, "Bolt", "Body",
                 new Vector3(0.027f, -0.018f, -0.085f), new Vector3(-0.012f, -0.032f, 0.27f), new Vector3(0.06f, -0.135f, 0.1f),
-                0.084f, 1f, p, Quaternion.Euler(0f, 100f, 0f) * forward, p.y,
+                0.084f, 1f, p, shop.ok ? shop.along : Quaternion.Euler(0f, 100f, 0f) * forward, p.y,
                 // Целика нет — глаз лежит на планке: линия прицеливания по верху ствольной коробки (0,057) на мушку (0,056 у дула).
                 // Точка в 0,28 м перед глазом (aimDistance) → глаз над шейкой приклада (z ≈ −0,10), а не над коробкой.
                 aimPointPos: new Vector3(0f, 0.06f, 0.18f));
             SetupPumpAction(shotgun);
+            PutOnSale(shotgun.GetComponent<WeaponPickup>(), shop, 2, 70);
         }
         if (uziAsset != null)
         {
-            var p = GroundPoint(spawn + forward * 3f - right * 3.5f, floor, floorY);
+            var p = shop.ok ? shop.gunPos[0] : GroundPoint(spawn + forward * 3f - right * 3.5f, floor, floorY);
             // Держится одной правой рукой: ладонь справа на рукояти (в ней магазин, z −0,053…−0,018), спуск — z 0…0,012.
             // Дуло: центр Body по высоте −0,007, ствол на y ≈ 0,028 → смещение +0,034.
             var uzi = BuildLongGun(uziAsset, "Uzi", "Uzi", 25, "Bolt", "Body",
                 new Vector3(0.022f, -0.045f, -0.05f), new Vector3(-0.021f, -0.125f, -0.036f), new Vector3(0.11f, -0.16f, 0.3f),
-                0.034f, 1f, p, Quaternion.Euler(0f, 150f, 0f) * forward, p.y,
+                0.034f, 1f, p, shop.ok ? shop.along : Quaternion.Euler(0f, 150f, 0f) * forward, p.y,
                 // Центр диоптра целика (z −0,16, y 0,0775) и верх мушки (z 0,143, y 0,078) — линия почти горизонтальна.
                 aimPointPos: new Vector3(0f, 0.078f, -0.02f),
                 rackHandleName: "ChargingKnob").GetComponent<WeaponPickup>();
@@ -184,17 +197,18 @@ public static class CanteenSceneBuilder
             uzi.recoilScale = 0.35f;
             uzi.reloadDuration = 2.1f;
             SetShotEffects(uzi, WeaponEffects.Profile.SMG, 0.85f, 2, 0.22f);
+            PutOnSale(uzi, shop, 0, 35);
         }
         if (mp5Asset != null)
         {
             // Прямо по ходу от входа, чуть правее — видно сразу после появления.
-            var p = GroundPoint(spawn + forward * 6f + right * 1.8f, floor, floorY);
+            var p = shop.ok ? shop.gunPos[1] : GroundPoint(spawn + forward * 6f + right * 1.8f, floor, floorY);
             // Правая рука — на пистолетной рукояти (позади спуска, z ≈ −0,06), левая — снизу на заднем краю цевья (z 0,145…0,27, низ y 0,044):
             // при прицеливании оружие вынесено вперёд, и до середины цевья рука бы не дотянулась.
             // Дуло: центр Body по высоте 0,016, ствол на y ≈ 0,064 → смещение +0,048.
             var mp5 = BuildLongGun(mp5Asset, "MP5", "MP5", 30, "Bolt", "Body",
                 new Vector3(0.023f, -0.05f, -0.062f), new Vector3(-0.012f, 0.025f, 0.17f), new Vector3(0.07f, -0.15f, 0.1f),
-                0.048f, 1f, p, Quaternion.Euler(0f, 75f, 0f) * forward, p.y, // боком к игроку — виден весь силуэт
+                0.048f, 1f, p, shop.ok ? shop.along : Quaternion.Euler(0f, 75f, 0f) * forward, p.y, // боком к игроку — виден весь силуэт
                 // Линия прицеливания — по верху мушки в кольцевом намушнике (z 0,299, y 0,114); целик (z −0,054, y 0,109) чуть ниже неё.
                 // Точка в 0,28 м перед глазом (aimDistance) → глаз в 0,21 м за ней, задний торец коробки (z −0,16) — в 5 см перед камерой,
                 // с запасом на отдачу (до 3 см назад); иначе он попадает за ближнюю плоскость отсечения и обрезается.
@@ -206,7 +220,22 @@ public static class CanteenSceneBuilder
             mp5.reloadDuration = 2.3f;
             mp5.rackRoll = 35f; // крен влево поднимает рукоять (она справа над цевьём) навстречу руке, идущей сверху
             SetShotEffects(mp5, WeaponEffects.Profile.SMG, 0.9f, 2, 0.25f);
+            PutOnSale(mp5, shop, 1, 50);
         }
+
+        // ---------- Продавщица за прилавком ----------
+        if (shop.ok) BuildShopkeeper(shop);
+        else Debug.LogWarning("CanteenSceneBuilder: не найден прилавок Line_Right — продавщицы нет, оружие лежит на полу бесплатно.");
+
+        // ---------- Босс в подвале ----------
+        if (basement.ok) BuildBoss(basement);
+
+        // ---------- Сюжет: рация, комната Шапика, записка, режиссёр ----------
+        Physics.SyncTransforms();
+        BuildStory(canteen.transform, basement, stairsDown);
+
+        // ---------- Аптечки и патроны на столах ----------
+        LevelPropsSetup.PlaceLoot(spawn);
 
         // ---------- Зомби ----------
         CreateZombieSpawner(floor);
@@ -215,9 +244,10 @@ public static class CanteenSceneBuilder
         Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
         EditorSceneManager.SaveScene(scene, ScenePath);
 
-        // Сцена — первая в Build Settings.
+        // Сцена — первая в Build Settings (сразу после главного меню, если оно есть).
         var scenes = EditorBuildSettings.scenes.Where(s => s.path != ScenePath).ToList();
-        scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+        int menuIndex = scenes.FindIndex(s => s.path == MainMenuSceneSetup.ScenePath);
+        scenes.Insert(menuIndex >= 0 ? menuIndex + 1 : 0, new EditorBuildSettingsScene(ScenePath, true));
         EditorBuildSettings.scenes = scenes.ToArray();
         EditorPrefs.SetInt(VersionKey, BuildVersion);
         AssetDatabase.SaveAssets();
@@ -245,27 +275,30 @@ public static class CanteenSceneBuilder
         EditorSceneManager.MarkSceneDirty(spawner.scene);
     }
 
-    /// <summary>Спавнер зомби: все модели Assets/Characters/Zombie*.glb, зона появления — пол столовой.</summary>
+    /// <summary>Спавнер зомби: все модели Assets/Characters/Zombies/Models/Zombie*.fbx, зона появления — пол столовой.</summary>
     static GameObject CreateZombieSpawner(Bounds floor)
     {
         foreach (var old in Object.FindObjectsByType<ZombieSpawner>())
             Object.DestroyImmediate(old.gameObject);
 
-        var prefabs = AssetDatabase.FindAssets("Zombie", new[] { "Assets/Characters" })
+        var prefabs = AssetDatabase.FindAssets("Zombie", new[] { "Assets/Characters/Zombies/Models" })
             .Select(AssetDatabase.GUIDToAssetPath)
-            .Where(p => p.EndsWith(".glb", System.StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p).StartsWith("Zombie"))
+            .Where(p => p.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase) && Path.GetFileName(p).StartsWith("Zombie"))
             .Distinct().OrderBy(p => p)
             .Select(AssetDatabase.LoadAssetAtPath<GameObject>)
             .Where(a => a != null).ToArray();
         if (prefabs.Length == 0)
         {
-            Debug.LogWarning("CanteenSceneBuilder: в Assets/Characters нет моделей Zombie*.glb — спавнер зомби не создан.");
+            Debug.LogWarning("CanteenSceneBuilder: в Assets/Characters/Zombies/Models нет моделей Zombie*.fbx — спавнер зомби не создан.");
             return null;
         }
 
         var go = new GameObject("ZombieSpawner");
         var spawner = go.AddComponent<ZombieSpawner>();
         spawner.zombiePrefabs = prefabs;
+        spawner.zombieAnimator = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(ZombieAnimationSetup.ControllerPath);
+        spawner.ashFlakeMaterial = AssetDatabase.LoadAssetAtPath<Material>(ZombieAnimationSetup.AshFlakePath);
+        spawner.ashDustMaterial = AssetDatabase.LoadAssetAtPath<Material>(ZombieAnimationSetup.AshDustPath);
         spawner.spawnArea = new Bounds(new Vector3(floor.center.x, floor.max.y + 0.3f, floor.center.z),
             new Vector3(Mathf.Max(1f, floor.size.x - 2f), 1f, Mathf.Max(1f, floor.size.z - 2f)));
         return go;
@@ -988,12 +1021,12 @@ public static class CanteenSceneBuilder
     /// Лестница вниз за дверным проёмом в задней стене кухни: копия лестницы Entrance2_StairTunnel_Up,
     /// развёрнутая так, что её верхняя площадка примыкает к проёму, а пролёт уходит вниз.
     /// </summary>
-    static void BuildStairsDown(Transform canteen, Transform kitchen)
+    static Transform BuildStairsDown(Transform canteen, Transform kitchen)
     {
         var source = FindChild(canteen, "Entrance2_StairTunnel_Up");
         var doorToCanteen = FindChild(kitchen, "Door_ToCanteen");
         var kitchenFloor = FindChild(kitchen, "Room_Floor");
-        if (source == null || doorToCanteen == null || kitchenFloor == null) return;
+        if (source == null || doorToCanteen == null || kitchenFloor == null) return null;
 
         // Проём в задней стене — в 2,4 м от двери в столовую в сторону середины кухни.
         Bounds floor = RendererBounds(kitchenFloor, new Bounds(kitchen.position, Vector3.zero));
@@ -1025,6 +1058,7 @@ public static class CanteenSceneBuilder
             l.color = new Color(0.97f, 0.98f, 1f);
             l.shadows = LightShadows.None;
         }
+        return stairs;
     }
 
     /// <summary>

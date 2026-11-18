@@ -27,6 +27,9 @@ public class SwingGate : MonoBehaviour
     public float handlePressTime = 0.5f;
 
     public bool IsOpen { get; private set; }
+    /// <summary>Заперта (по сюжету): не открывается ни игроком, ни зомби. lockedMessage — подсказка игроку.</summary>
+    public bool Locked { get; set; }
+    public string lockedMessage = "Заперто";
 
     Quaternion[] closedRot;
     Vector3[] closedPos, hinge, closedCenters;
@@ -55,7 +58,7 @@ public class SwingGate : MonoBehaviour
     {
         foreach (var g in all)
         {
-            if (g.IsOpen || g.closedCenters == null) continue;
+            if (g.IsOpen || g.Locked || g.closedCenters == null) continue;
             bool near = false;
             for (int i = 0; i < g.closedCenters.Length && !near; i++)
             {
@@ -92,6 +95,7 @@ public class SwingGate : MonoBehaviour
     /// <summary>Переключает калитку. viewer — откуда смотрят: при открытии створки уходят от него.</summary>
     public void Toggle(Vector3 viewer)
     {
+        if (Locked && !IsOpen) return;
         if (!IsOpen)
         {
             for (int i = 0; i < leaves.Length; i++)

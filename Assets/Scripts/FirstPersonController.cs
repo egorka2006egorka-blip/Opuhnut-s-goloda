@@ -46,6 +46,14 @@ public class FirstPersonController : MonoBehaviour
     /// <summary>Множитель чувствительности мыши (меньше 1 при прицеливании).</summary>
     public float LookSensitivityScale { get; set; } = 1f;
 
+    /// <summary>Катсцена: управление (ходьба, обзор, стрельба, E) отключено, камерой управляет StoryDirector.</summary>
+    public static bool InputLocked { get; set; }
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() { InputLocked = false; }
+    /// <summary>Сдвиг камеры по высоте (м) и крен (°) — для катсцен (герой лежит головой на столе).</summary>
+    public float EyeOffset { get; set; }
+    public float CameraRoll { get; set; }
+
     CharacterController controller;
     Vector3 horizontalVelocity;
     float verticalVelocity;
@@ -80,6 +88,9 @@ public class FirstPersonController : MonoBehaviour
     {
         controller = GetComponent<CharacterController>();
         if (GetComponent<PlayerHealth>() == null) gameObject.AddComponent<PlayerHealth>();
+        if (GetComponent<Inventory>() == null) gameObject.AddComponent<Inventory>();
+        if (GetComponent<InventoryScreen>() == null) gameObject.AddComponent<InventoryScreen>();
+        if (GetComponent<PropGrabber>() == null) gameObject.AddComponent<PropGrabber>();
         if (cameraPivot != null)
             Pitch = NormalizeAngle(cameraPivot.localEulerAngles.x);
     }
@@ -88,20 +99,20 @@ public class FirstPersonController : MonoBehaviour
 
     void Update()
     {
-        var keyboard = Keyboard.current;
+        // Пауза: управление отключено, курсор отдан меню (Esc обрабатывает PauseMenu).
+        if (PauseMenu.IsPaused) return;
         var mouse = Mouse.current;
 
-        // Курсор: Esc — отпустить, клик — снова захватить.
-        if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame) LockCursor(false);
-        if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
+        // Курсор: клик — снова захватить (если его отпустили, например, сменой окна). В инвентаре курсор нужен для меню.
+        if (mouse != null && mouse.leftButton.wasPressedThisFrame && Cursor.lockState != CursorLockMode.Locked && !InventoryScreen.IsOpen && !Shopkeeper.IsShopOpen && !StoryDirector.CursorNeeded) LockCursor(true);
 
-        bool lookActive = Cursor.lockState == CursorLockMode.Locked;
-        if (keyboard != null && lookActive && keyboard.vKey.wasPressedThisFrame) ThirdPerson = !ThirdPerson;
+        bool lookActive = Cursor.lockState == CursorLockMode.Locked && !InputLocked;
+        if (lookActive && Controls.WasPressed(GameAction.ToggleView)) ThirdPerson = !ThirdPerson;
 
         // Обзор мышью.
         if (mouse != null && lookActive)
         {
-            Vector2 delta = mouse.delta.ReadValue() * mouseSensitivity * LookSensitivityScale;
+            Vector2 delta = mouse.delta.ReadValue() * mouseSensitivity * LookSensitivityScale * GameSettings.MouseSensitivity;
             transform.Rotate(0f, delta.x, 0f, Space.Self);
             Pitch = Mathf.Clamp(Pitch - delta.y, minPitch, maxPitch);
         }
@@ -109,14 +120,14 @@ public class FirstPersonController : MonoBehaviour
         // Ввод движения.
         Vector2 input = Vector2.zero;
         bool sprint = false, jump = false;
-        if (keyboard != null && lookActive)
+        if (lookActive)
         {
-            if (keyboard.wKey.isPressed) input.y += 1f;
-            if (keyboard.sKey.isPressed) input.y -= 1f;
-            if (keyboard.dKey.isPressed) input.x += 1f;
-            if (keyboard.aKey.isPressed) input.x -= 1f;
-            sprint = keyboard.leftShiftKey.isPressed && input.y > 0f;
-            jump = keyboard.spaceKey.wasPressedThisFrame;
+            if (Controls.IsPressed(GameAction.MoveForward)) input.y += 1f;
+            if (Controls.IsPressed(GameAction.MoveBack)) input.y -= 1f;
+            if (Controls.IsPressed(GameAction.MoveRight)) input.x += 1f;
+            if (Controls.IsPressed(GameAction.MoveLeft)) input.x -= 1f;
+            sprint = Controls.IsPressed(GameAction.Sprint) && input.y > 0f;
+            jump = Controls.WasPressed(GameAction.Jump);
         }
         Locomotion(input, sprint, jump, Time.deltaTime);
         UpdateCamera();
@@ -170,7 +181,7 @@ public class FirstPersonController : MonoBehaviour
         // Голова опускается при каждом шаге (два раза за цикл) и чуть качается в стороны.
         float bobY = -Mathf.Abs(Mathf.Sin(StepPhase)) * bobAmount * bobBlend;
         float bobX = Mathf.Cos(StepPhase) * bobAmount * 0.4f * bobBlend;
-        cameraPivot.localPosition = new Vector3(bobX, eyeHeight + bobY, 0f);
+        cameraPivot.localPosition = new Vector3(bobX, eyeHeight + bobY + EyeOffset, 0f);
         // Отдача: камера быстро подбрасывается и плавно возвращается.
         recoilTarget = Mathf.MoveTowards(recoilTarget, 0f, Time.deltaTime * 9f);
         recoilPitch = Mathf.Lerp(recoilPitch, recoilTarget, Time.deltaTime * 25f);
@@ -178,7 +189,7 @@ public class FirstPersonController : MonoBehaviour
         shake = Mathf.MoveTowards(shake, 0f, Time.deltaTime * 5f);
         float shakeX = (Mathf.PerlinNoise(Time.time * 40f, 0.3f) - 0.5f) * 2f * shake;
         float shakeY = (Mathf.PerlinNoise(0.7f, Time.time * 40f) - 0.5f) * 2f * shake;
-        cameraPivot.localRotation = Quaternion.Euler(Pitch - recoilPitch + shakeX, shakeY, recoilPitch * 0.15f + shakeY * 0.5f);
+        cameraPivot.localRotation = Quaternion.Euler(Pitch - recoilPitch + shakeX, shakeY, recoilPitch * 0.15f + shakeY * 0.5f + CameraRoll);
 
         if (playerCamera != null)
         {
@@ -198,11 +209,33 @@ public class FirstPersonController : MonoBehaviour
         }
     }
 
+    /// <summary>Катсцена: плавно повернуть взгляд на точку (sharpness — скорость, 1/с).</summary>
+    public void LookAt(Vector3 point, float sharpness, float dt)
+    {
+        Vector3 from = cameraPivot != null ? cameraPivot.position : transform.position + Vector3.up * eyeHeight;
+        Vector3 d = point - from;
+        Vector3 flat = new Vector3(d.x, 0f, d.z);
+        float k = 1f - Mathf.Exp(-sharpness * dt);
+        if (flat.sqrMagnitude > 1e-4f)
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(flat), k);
+        float pitch = -Mathf.Atan2(d.y, flat.magnitude) * Mathf.Rad2Deg;
+        Pitch = Mathf.Clamp(Mathf.LerpAngle(Pitch, pitch, k), minPitch, maxPitch);
+    }
+
+    public void SetPitch(float pitch) => Pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+
     /// <summary>Отдача от выстрела: вверх (градусы) и случайно вбок.</summary>
     public void AddRecoil(float up, float side)
     {
         recoilTarget = Mathf.Min(recoilTarget + up, 8f);
         transform.Rotate(0f, side, 0f, Space.Self);
+    }
+
+    /// <summary>Толчок (удар босса): горизонтальная скорость добавляется и гасится трением, вертикальная — подбрасывает.</summary>
+    public void AddImpulse(Vector3 velocity)
+    {
+        horizontalVelocity += new Vector3(velocity.x, 0f, velocity.z);
+        if (velocity.y > 0f) verticalVelocity = Mathf.Max(verticalVelocity, velocity.y);
     }
 
     /// <summary>Тряска камеры (амплитуда в градусах).</summary>
@@ -211,7 +244,20 @@ public class FirstPersonController : MonoBehaviour
         shake = Mathf.Min(shake + amount, 1.5f);
     }
 
-    static void LockCursor(bool locked)
+    /// <summary>Мгновенно ставит игрока в точку с заданным поворотом (загрузка сохранения).</summary>
+    public void Teleport(Vector3 position, float yaw, float pitch)
+    {
+        if (controller == null) controller = GetComponent<CharacterController>();
+        bool was = controller.enabled;
+        controller.enabled = false;
+        transform.SetPositionAndRotation(position, Quaternion.Euler(0f, yaw, 0f));
+        controller.enabled = was;
+        Pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+        horizontalVelocity = Vector3.zero;
+        verticalVelocity = 0f;
+    }
+
+    public static void LockCursor(bool locked)
     {
         Cursor.lockState = locked ? CursorLockMode.Locked : CursorLockMode.None;
         Cursor.visible = !locked;

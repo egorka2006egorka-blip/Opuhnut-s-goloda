@@ -12,6 +12,17 @@ public class WeaponPickup : MonoBehaviour
     public static readonly List<WeaponPickup> All = new List<WeaponPickup>();
 
     public string displayName = "Пистолет";
+    [Header("Ближний бой")]
+    [Tooltip("Оружие ближнего боя (лом): без патронов и прицеливания, ЛКМ — удар.")]
+    public bool melee;
+    public float meleeDamage = 45f;
+    public float meleeRange = 2.1f;
+
+    [Header("Магазин")]
+    [Tooltip("Оружие лежит на прилавке как товар: взять его нельзя, пока не куплено у продавщицы (Shopkeeper).")]
+    public bool forSale;
+    [Tooltip("Цена в монетах.")]
+    public int price;
     public Transform gripRight;
     public Transform gripLeft;
     [Tooltip("Держится одной правой рукой. Левая рука берётся за gripLeft только при перезарядке, в остальное время свободна.")]
@@ -39,6 +50,8 @@ public class WeaponPickup : MonoBehaviour
 
     [Tooltip("Ёмкость магазина.")]
     public int magazineSize = 12;
+    [Tooltip("Какие патроны из инвентаря берутся при перезарядке (ammo_9mm, ammo_545, ammo_12g). Пусто — определяется по типу и названию оружия.")]
+    public string ammoType = "";
     [Tooltip("Автоматический огонь: стреляет, пока зажата ЛКМ. Иначе — один выстрел на нажатие.")]
     public bool automatic;
     [Tooltip("Интервал между выстрелами (с); 0 — по умолчанию из PlayerWeaponHandler.")]
@@ -82,8 +95,18 @@ public class WeaponPickup : MonoBehaviour
     /// <summary>Съёмный магазин (дочерний объект «Magazine»).</summary>
     public Transform magazine;
 
-    /// <summary>Вставляет полный магазин (запас патронов не ограничен). Затвор остаётся как был.</summary>
+    /// <summary>Вставляет полный магазин (без учёта запаса). Затвор остаётся как был.</summary>
     public void Reload() => Ammo = magazineSize;
+
+    /// <summary>Добавляет патроны в магазин (не больше ёмкости). Затвор остаётся как был.</summary>
+    public void AddAmmo(int count) => Ammo = Mathf.Clamp(Mathf.Max(0, Ammo) + count, 0, magazineSize);
+
+    /// <summary>Задаёт число патронов в магазине (загрузка сохранения).</summary>
+    public void SetAmmo(int ammo)
+    {
+        Ammo = Mathf.Clamp(ammo, 0, magazineSize);
+        SlideLocked = Ammo == 0 && !IsPumpAction;
+    }
 
     /// <summary>Добавляет один патрон (поштучное заряжание).</summary>
     public void AddShell() => Ammo = Mathf.Min(Ammo + 1, magazineSize);

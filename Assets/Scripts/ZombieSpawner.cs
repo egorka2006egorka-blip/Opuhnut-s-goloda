@@ -9,8 +9,20 @@ using UnityEngine.AI;
 /// </summary>
 public class ZombieSpawner : MonoBehaviour
 {
-    [Tooltip("Модели зомби (Assets/Characters/Zombie_*.glb). Для каждого нового зомби выбирается случайная.")]
+    /// <summary>Спавнер сцены (для босса, который призывает зомби).</summary>
+    public static ZombieSpawner Instance { get; private set; }
+    /// <summary>Тип агента NavMesh, под который запечён NavMesh (нужен боссу). -1 — NavMesh ещё не запечён.</summary>
+    public static int AgentTypeId { get; private set; } = -1;
+
+    [Tooltip("Модели зомби (Assets/Characters/Zombies/Models/Zombie_*.fbx). Для каждого нового зомби выбирается случайная.")]
     public GameObject[] zombiePrefabs;
+    [Tooltip("Animator Controller зомби (Assets/Characters/Zombies/Animator/Zombie.controller, собирается через Tools → Zombies → Setup Animations).")]
+    public RuntimeAnimatorController zombieAnimator;
+    [Tooltip("Прах после смерти: хлопья пепла (Assets/Characters/Zombies/Materials/FX_Ash) и пыль (Assets/Effects/FX_Smoke).")]
+    public Material ashFlakeMaterial, ashDustMaterial;
+
+    [Tooltip("Сам поддерживает число зомби. Выключено — зомби выпускает сюжет (StoryDirector) волнами через Spawn().")]
+    public bool autoSpawn = true;
 
     [Header("Количество")]
     public int maxAlive = 6;
@@ -40,9 +52,13 @@ public class ZombieSpawner : MonoBehaviour
     NavMeshPath path;
     NavMeshDataInstance navMesh;
 
+    void Awake() => Instance = this;
+
     void Start()
     {
         path = new NavMeshPath();
+        Zombie.AshFlakeMaterial = ashFlakeMaterial;
+        Zombie.AshDustMaterial = ashDustMaterial;
         var fpc = FindAnyObjectByType<FirstPersonController>();
         if (fpc != null)
         {
@@ -51,12 +67,13 @@ public class ZombieSpawner : MonoBehaviour
         }
         if (bakeNavMeshOnStart) BakeNavMesh();
 
-        for (int i = 0; i < initialCount && Zombie.AliveCount < maxAlive; i++) Spawn();
+        if (autoSpawn) for (int i = 0; i < initialCount && Zombie.AliveCount < maxAlive; i++) Spawn();
         timer = spawnInterval;
     }
 
     void Update()
     {
+        if (!autoSpawn) return;
         timer -= Time.deltaTime;
         if (timer > 0f) return;
         timer = spawnInterval;
@@ -78,7 +95,12 @@ public class ZombieSpawner : MonoBehaviour
         void Ignore(Transform t) { if (t != null) markups.Add(new NavMeshBuildMarkup { root = t, ignoreFromBuild = true, applyToChildren = true }); }
         Ignore(player);
         foreach (var w in WeaponPickup.All) if (w != null) Ignore(w.transform);
+        // Мелкие предметы двигаются (их берут и бросают) — в NavMesh они не препятствия, иначе останутся «дыры».
+        foreach (var g in GrabbableProp.All) if (g != null) Ignore(g.transform);
+        foreach (var i in ItemPickup.All) if (i != null) Ignore(i.transform);
         foreach (var z in Zombie.All) if (z != null) Ignore(z.transform);
+        foreach (var b in ZombieBoss.All) if (b != null) Ignore(b.transform);
+        foreach (var s in FindObjectsByType<Shopkeeper>()) Ignore(s.transform);
         // Створки дверей и калиток тоже: закрытая дверь при запекании перекрывала бы проём,
         // и зомби не могли бы пройти в другие помещения. Закрытые двери зомби открывают сами (Zombie → SwingGate.OpenNear).
         foreach (var g in SwingGate.All)
@@ -102,12 +124,28 @@ public class ZombieSpawner : MonoBehaviour
         var data = NavMeshBuilder.BuildNavMeshData(settings, sources, bounds, Vector3.zero, Quaternion.identity);
         if (data == null) { Debug.LogWarning("ZombieSpawner: не удалось построить NavMesh."); return; }
         navMesh = NavMesh.AddNavMeshData(data);
+        AgentTypeId = agentTypeId;
         Debug.Log($"ZombieSpawner: NavMesh запечён за {(Time.realtimeSinceStartup - t0):0.00} с ({sources.Count} объектов).");
     }
 
     void OnDestroy()
     {
         if (navMesh.valid) NavMesh.RemoveNavMeshData(navMesh);
+        if (Instance == this) { Instance = null; AgentTypeId = -1; }
+    }
+
+    /// <summary>Зомби в ближайшей к pos точке NavMesh (для призыва боссом). null — некуда поставить.</summary>
+    public Zombie SpawnAt(Vector3 pos)
+    {
+        if (zombiePrefabs == null || zombiePrefabs.Length == 0) return null;
+        var prefab = zombiePrefabs[Random.Range(0, zombiePrefabs.Length)];
+        if (prefab == null) return null;
+        var filter = new NavMeshQueryFilter { agentTypeID = agentTypeId, areaMask = NavMesh.AllAreas };
+        if (!NavMesh.SamplePosition(pos, out NavMeshHit hit, 2f, filter)) return null;
+        Vector3 look = player != null ? player.position - hit.position : Random.insideUnitSphere;
+        look.y = 0f;
+        if (look.sqrMagnitude < 1e-4f) look = Vector3.forward;
+        return Zombie.Create(prefab, zombieAnimator, hit.position, Quaternion.LookRotation(look), agentTypeId);
     }
 
     public Zombie Spawn()
@@ -121,7 +159,7 @@ public class ZombieSpawner : MonoBehaviour
         Vector3 look = player != null ? player.position - pos : Random.insideUnitSphere;
         look.y = 0f;
         if (look.sqrMagnitude < 1e-4f) look = Vector3.forward;
-        return Zombie.Create(prefab, pos, Quaternion.LookRotation(look), agentTypeId);
+        return Zombie.Create(prefab, zombieAnimator, pos, Quaternion.LookRotation(look), agentTypeId);
     }
 
     bool FindSpawnPoint(out Vector3 pos)

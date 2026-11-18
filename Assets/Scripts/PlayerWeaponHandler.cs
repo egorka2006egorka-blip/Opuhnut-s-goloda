@@ -27,6 +27,14 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     WeaponPickup lookTarget;
     SwingGate lookGate;
+    ItemPickup lookItem;
+    Shopkeeper lookShop;
+    Interactable lookStory;
+    Inventory inventory;
+    PropGrabber grabber;
+
+    /// <summary>Игрок смотрит на оружие, предмет для инвентаря или калитку — E занята ими (а не переносом предметов).</summary>
+    public bool HasInteractTarget => lookTarget != null || lookItem != null || lookGate != null || lookShop != null || lookStory != null;
     float pickupT = 1f;
     Vector3 pickupStartLocalPos;
     Quaternion pickupStartLocalRot;
@@ -107,48 +115,146 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void Start()
     {
+        inventory = GetComponent<Inventory>();
+        grabber = GetComponent<PropGrabber>();
         if (playerCamera != null) baseFov = playerCamera.fieldOfView;
     }
 
     void Update()
     {
-        bool locked = Cursor.lockState == CursorLockMode.Locked;
-        var keyboard = Keyboard.current;
+        if (PauseMenu.IsPaused) return;
+        bool locked = Cursor.lockState == CursorLockMode.Locked && !FirstPersonController.InputLocked;
         var mouse = Mouse.current;
 
         UpdateAim(mouse, locked);
 
         lookTarget = FindLookTarget();
-        lookGate = lookTarget == null ? FindLookGate() : null;
-        if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookTarget != null)
+        lookItem = lookTarget == null && playerCamera != null ? ItemPickup.FindLook(playerCamera.transform, transform, pickupRange, pickupAngle) : null;
+        lookStory = lookTarget == null && lookItem == null && playerCamera != null ? Interactable.FindLook(playerCamera.transform, transform) : null;
+        lookGate = lookTarget == null && lookItem == null && lookStory == null ? FindLookGate() : null;
+        lookShop = lookTarget == null && lookItem == null && lookGate == null && lookStory == null && playerCamera != null
+            ? Shopkeeper.FindLook(playerCamera.transform, transform) : null;
+        bool interact = locked && Controls.WasPressed(GameAction.Interact);
+        if (interact && lookTarget != null && lookTarget.forSale)
+            Shopkeeper.OpenShop(lookTarget); // товар на прилавке — сначала купить
+        else if (interact && lookTarget != null)
             PickUp(lookTarget);
-        else if (locked && keyboard != null && keyboard.eKey.wasPressedThisFrame && lookGate != null)
-            lookGate.Toggle(transform.position);
-        else if (locked && keyboard != null && keyboard.gKey.wasPressedThisFrame && CurrentWeapon != null)
+        else if (interact && lookItem != null)
+            lookItem.Collect(inventory);
+        else if (interact && lookStory != null)
+            lookStory.Interact(gameObject);
+        else if (interact && lookGate != null)
+        {
+            if (lookGate.Locked && !lookGate.IsOpen) DialogueSystem.ShowText("GALYA", lookGate.lockedMessage, 2.5f);
+            else lookGate.Toggle(transform.position);
+        }
+        else if (interact && lookShop != null)
+            Shopkeeper.OpenShop(null);
+        else if (locked && Controls.WasPressed(GameAction.Throw) && CurrentWeapon != null)
             Throw();
 
         UpdatePump();
-        if (locked && keyboard != null && keyboard.rKey.wasPressedThisFrame && CanReload())
+        if (locked && Controls.WasPressed(GameAction.Reload) && CanReload())
             StartReload();
         // Поштучное заряжание можно прервать выстрелом: дозаряжается текущий патрон, и рука возвращается на цевьё.
-        if (IsReloading && shellMode && locked && mouse != null && mouse.leftButton.wasPressedThisFrame)
+        if (IsReloading && shellMode && locked && Controls.WasPressed(GameAction.Fire))
             shellStop = true;
         UpdateReload();
 
         if (!locked) triggerBlocked = true;
-        else if (mouse != null && !mouse.leftButton.isPressed) triggerBlocked = false;
+        else if (!Controls.IsPressed(GameAction.Fire)) triggerBlocked = false;
         // Автоматическое оружие стреляет, пока зажата ЛКМ; остальное — по одному выстрелу на нажатие.
-        bool trigger = mouse != null && CurrentWeapon != null &&
-                       (CurrentWeapon.automatic ? mouse.leftButton.isPressed && !triggerBlocked : mouse.leftButton.wasPressedThisFrame);
-        if (locked && trigger && pickupT >= 1f && !IsReloading && !IsPumping)
+        bool trigger = CurrentWeapon != null &&
+                       (CurrentWeapon.automatic && !CurrentWeapon.melee ? Controls.IsPressed(GameAction.Fire) && !triggerBlocked : Controls.WasPressed(GameAction.Fire));
+        // Пока в руках предмет (или ЛКМ ещё зажата после броска) — не стреляем.
+        if (locked && trigger && pickupT >= 1f && !IsReloading && !IsPumping && !(grabber != null && grabber.BlocksFire))
             Fire();
 
+        UpdateSwing();
         UpdateHolder(mouse, locked);
         UpdateHeldWeapon();
     }
 
+    /// <summary>В руках оружие ближнего боя (лом).</summary>
+    public bool Melee => CurrentWeapon != null && CurrentWeapon.melee;
+    float swing = -1f; // фаза удара 0..1, меньше 0 — не бьёт
+    bool swingHit;
+
+    /// <summary>Замах и удар ломом (и для взлома замка клетки).</summary>
+    public void PlaySwing()
+    {
+        if (!Melee || (swing >= 0f && swing < 0.6f)) return;
+        swing = 0f;
+        swingHit = true; // по замку бьём без поиска цели
+        AudioSource.PlayClipAtPoint(BossSounds.Whoosh(), playerCamera != null ? playerCamera.transform.position : transform.position, 0.5f * GameSettings.EffectsVolume);
+    }
+
+    void MeleeSwing()
+    {
+        if (swing >= 0f && swing < 0.85f) return;
+        swing = 0f;
+        swingHit = false;
+        AudioSource.PlayClipAtPoint(BossSounds.Whoosh(), playerCamera != null ? playerCamera.transform.position : transform.position, 0.5f * GameSettings.EffectsVolume);
+    }
+
+    void UpdateSwing()
+    {
+        if (swing < 0f) return;
+        swing += Time.deltaTime / 0.55f;
+        if (!swingHit && swing >= 0.42f)
+        {
+            swingHit = true;
+            MeleeHit();
+        }
+        if (swing >= 1f || !Melee) swing = -1f;
+    }
+
+    /// <summary>Удар: первое, во что попадает лом перед камерой (зомби, босс, предмет, стена).</summary>
+    void MeleeHit()
+    {
+        if (playerCamera == null || CurrentWeapon == null) return;
+        Physics.SyncTransforms();
+        Transform cam = playerCamera.transform;
+        var hits = Physics.SphereCastAll(cam.position, 0.25f, cam.forward, CurrentWeapon.meleeRange, ~0, QueryTriggerInteraction.Ignore);
+        System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+        foreach (var h in hits)
+        {
+            if (h.transform.IsChildOf(transform) || h.transform.IsChildOf(CurrentWeapon.transform)) continue;
+            Vector3 point = h.distance > 0f ? h.point : cam.position + cam.forward * 0.8f;
+            var hb = h.collider.GetComponent<ZombieHitbox>();
+            if (hb != null && hb.HasOwner)
+            {
+                hb.Hit(CurrentWeapon.meleeDamage, point, cam.forward);
+                AudioSource.PlayClipAtPoint(BossSounds.Step(), point, 0.8f * GameSettings.EffectsVolume);
+            }
+            else if (h.collider.GetComponentInParent<ShapikCage>() is ShapikCage cage && !cage.IsOpen && Vector3.Distance(point, cage.Focus) < 0.9f)
+                cage.Interact(gameObject); // удар ЛКМ по замку клетки — тоже взлом
+            else
+            {
+                AudioSource.PlayClipAtPoint(BossSounds.Slam(), point, 0.25f * GameSettings.EffectsVolume);
+                if (h.rigidbody != null && !h.rigidbody.isKinematic) h.rigidbody.AddForceAtPosition(cam.forward * 4f, point, ForceMode.Impulse);
+            }
+            if (controller != null) controller.AddShake(0.25f);
+            return;
+        }
+    }
+
     bool CanReload() =>
-        CurrentWeapon != null && pickupT >= 1f && !IsReloading && !IsPumping && CurrentWeapon.Ammo >= 0 && CurrentWeapon.Ammo < CurrentWeapon.magazineSize;
+        CurrentWeapon != null && !CurrentWeapon.melee && pickupT >= 1f && !IsReloading && !IsPumping && CurrentWeapon.Ammo >= 0 && CurrentWeapon.Ammo < CurrentWeapon.magazineSize
+        && Reserve > 0;
+
+    /// <summary>Сколько патронов к оружию в руках лежит в инвентаре (без инвентаря — запас не ограничен).</summary>
+    public int Reserve => CurrentWeapon == null ? 0 : inventory == null ? int.MaxValue : inventory.Count(ItemDatabase.AmmoFor(CurrentWeapon));
+
+    /// <summary>Досыпает магазин патронами из инвентаря (сколько есть).</summary>
+    void FillMagazine()
+    {
+        var w = CurrentWeapon;
+        if (w == null) return;
+        if (inventory == null) { w.Reload(); return; }
+        int need = w.magazineSize - Mathf.Max(0, w.Ammo);
+        w.AddAmmo(inventory.Take(ItemDatabase.AmmoFor(w), need));
+    }
 
     void StartReload()
     {
@@ -192,7 +298,7 @@ public class PlayerWeaponHandler : MonoBehaviour
         {
             float tm = reloadClock / Mathf.Max(0.5f, ReloadTime);
             reloadBump = Mathf.Sin(Mathf.Clamp01(tm) * Mathf.PI);
-            if (!ammoFilled && tm >= 0.92f) { CurrentWeapon.Reload(); ammoFilled = true; }
+            if (!ammoFilled && tm >= 0.92f) { FillMagazine(); ammoFilled = true; }
             if (tm >= 1f)
             {
                 if (wasEmpty) { rackStage = true; reloadClock = 0f; reloadBump = 0f; }
@@ -234,10 +340,14 @@ public class PlayerWeaponHandler : MonoBehaviour
             return;
         }
         float t = reloadClock / Mathf.Max(0.2f, CurrentWeapon.shellInsertDuration);
-        if (!shellInserted && t >= ShellInsertAt) { CurrentWeapon.AddShell(); shellInserted = true; }
+        if (!shellInserted && t >= ShellInsertAt)
+        {
+            if (inventory == null || inventory.Take(ItemDatabase.AmmoFor(CurrentWeapon), 1) > 0) CurrentWeapon.AddShell();
+            shellInserted = true;
+        }
         if (t < 1f) return;
         reloadClock = 0f;
-        if (CurrentWeapon.Ammo >= CurrentWeapon.magazineSize || shellStop) shellFinishing = true;
+        if (CurrentWeapon.Ammo >= CurrentWeapon.magazineSize || shellStop || Reserve <= 0) shellFinishing = true;
         else { shellInserted = false; shellFirst = false; }
     }
 
@@ -270,7 +380,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void FinishReload()
     {
-        if (CurrentWeapon != null && !ammoFilled) CurrentWeapon.Reload();
+        if (CurrentWeapon != null && !ammoFilled) FillMagazine();
         EndReloadState();
     }
 
@@ -627,8 +737,8 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void UpdateAim(Mouse mouse, bool locked)
     {
-        bool aiming = locked && mouse != null && mouse.rightButton.isPressed && !IsReloading
-                      && CurrentWeapon != null && pickupT >= 1f && hasAimPos
+        bool aiming = locked && Controls.IsPressed(GameAction.Aim) && !IsReloading
+                      && CurrentWeapon != null && !CurrentWeapon.melee && pickupT >= 1f && hasAimPos
                       && (controller == null || !controller.ThirdPerson);
         AimWeight = Mathf.MoveTowards(AimWeight, aiming ? 1f : 0f, Time.deltaTime * aimSpeed * 0.5f);
         float t = Mathf.SmoothStep(0f, 1f, AimWeight);
@@ -718,6 +828,12 @@ public class PlayerWeaponHandler : MonoBehaviour
         return r != null ? r.bounds.center : w.transform.position;
     }
 
+    /// <summary>Взять оружие в руки (загрузка сохранения).</summary>
+    public void Equip(WeaponPickup weapon)
+    {
+        if (weapon != null && weapon != CurrentWeapon) PickUp(weapon);
+    }
+
     void PickUp(WeaponPickup weapon)
     {
         if (CurrentWeapon != null) Drop(weapon.transform.position, weapon.transform.rotation);
@@ -783,6 +899,7 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void Fire()
     {
+        if (CurrentWeapon.melee) { MeleeSwing(); return; }
         if (Time.time < nextFireTime) return;
         if (!CurrentWeapon.TryConsumeAmmo()) return; // магазин пуст
         nextFireTime = Time.time + FireInterval;
@@ -831,6 +948,14 @@ public class PlayerWeaponHandler : MonoBehaviour
         float rl = IsReloading ? Mathf.SmoothStep(0f, 1f, reloadBump) : 0f;
         Vector3 reloadPos = new Vector3(-0.015f, -0.02f, -0.02f) * rl;
         Vector3 reloadRot = new Vector3(-6f, 0f, 8f) * rl + new Vector3(0f, 0f, CurrentWeapon != null ? CurrentWeapon.rackRoll : rackRollAngle) * Mathf.SmoothStep(0f, 1f, rackRoll);
+        // Удар ломом: замах вверх-вправо, затем рывок вниз-влево и возврат.
+        if (swing >= 0f)
+        {
+            float up = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0f, 0.3f, swing)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 0.45f, swing)));
+            float down = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.3f, 0.45f, swing)) * (1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, swing)));
+            reloadRot += new Vector3(-45f * up + 55f * down, 25f * up - 30f * down, -20f * up + 25f * down);
+            reloadPos += new Vector3(0.06f * up - 0.08f * down, 0.08f * up - 0.06f * down, -0.05f * up + 0.12f * down);
+        }
 
         // Поштучное заряжание: ружьё кренится, подставляя окно заряжания левой руке, чуть приподнимает ствол
         // и опускается, чтобы рука с патроном оставалась ниже кадра.
@@ -871,16 +996,22 @@ public class PlayerWeaponHandler : MonoBehaviour
 
     void OnGUI()
     {
+        if (SaveSystem.HideHud || StoryDirector.HideHud) return; // снимок экрана для сохранения и титры — без интерфейса
         // Прицел.
         float cx = Screen.width * 0.5f, cy = Screen.height * 0.5f;
         GUI.color = new Color(1f, 1f, 1f, 0.85f * (1f - AimWeight));
         GUI.DrawTexture(new Rect(cx - 2, cy - 2, 4, 4), Texture2D.whiteTexture);
 
         var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(16, Screen.height / 40), alignment = TextAnchor.MiddleCenter };
-        if ((lookTarget != null || lookGate != null) && Cursor.lockState == CursorLockMode.Locked)
+        if ((lookTarget != null || lookItem != null || lookGate != null || lookShop != null || lookStory != null) && Cursor.lockState == CursorLockMode.Locked && !FirstPersonController.InputLocked)
         {
-            string text = lookTarget != null ? "[E]  Подобрать: " + lookTarget.displayName
-                : lookGate.IsOpen ? "[E]  Закрыть" : "[E]  Открыть";
+            string key = "[" + Controls.KeyName(GameAction.Interact) + "]  ";
+            string text = lookTarget != null && lookTarget.forSale ? key + "Купить: " + lookTarget.displayName + " — " + lookTarget.price + " мон."
+                : lookTarget != null ? key + "Подобрать: " + lookTarget.displayName
+                : lookItem != null ? key + "Подобрать: " + lookItem.Label
+                : lookStory != null ? key + lookStory.Prompt
+                : lookShop != null ? key + "Поговорить с Галей (магазин)"
+                : lookGate.IsOpen ? key + "Закрыть" : lookGate.Locked ? key + "Открыть (заперто)" : key + "Открыть";
             var rect = new Rect(cx - 300, cy + 40, 600, 40);
             GUI.color = new Color(0, 0, 0, 0.8f);
             GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), text, style);
@@ -889,7 +1020,7 @@ public class PlayerWeaponHandler : MonoBehaviour
         }
 
         // Счётчик патронов — снизу слева.
-        if (CurrentWeapon != null && CurrentWeapon.Ammo >= 0)
+        if (CurrentWeapon != null && CurrentWeapon.Ammo >= 0 && !CurrentWeapon.melee)
         {
             int ammo = CurrentWeapon.Ammo;
             var ammoStyle = new GUIStyle(GUI.skin.label)
@@ -898,7 +1029,9 @@ public class PlayerWeaponHandler : MonoBehaviour
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.LowerLeft
             };
-            string ammoText = IsReloading && !ammoFilled ? "..." : ammo + " / " + CurrentWeapon.magazineSize;
+            // В магазине / в запасе (в инвентаре).
+            int reserve = Reserve;
+            string ammoText = IsReloading && !ammoFilled ? "..." : ammo + " / " + (reserve == int.MaxValue ? "∞" : reserve.ToString());
             var ammoRect = new Rect(24, Screen.height - 84, 400, 70);
             GUI.color = new Color(0, 0, 0, 0.8f);
             GUI.Label(new Rect(ammoRect.x + 2, ammoRect.y + 2, ammoRect.width, ammoRect.height), ammoText, ammoStyle);
@@ -906,7 +1039,24 @@ public class PlayerWeaponHandler : MonoBehaviour
             GUI.Label(ammoRect, ammoText, ammoStyle);
         }
 
-        if (Cursor.lockState != CursorLockMode.Locked)
+        // Монеты — снизу справа.
+        if (inventory != null && !Shopkeeper.IsShopOpen)
+        {
+            var coinStyle = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = Mathf.Max(18, Screen.height / 34),
+                fontStyle = FontStyle.Bold,
+                alignment = TextAnchor.LowerRight
+            };
+            string coinText = "Монеты: " + inventory.Count(ItemDatabase.Coin);
+            var coinRect = new Rect(Screen.width - 424, Screen.height - 60, 400, 44);
+            GUI.color = new Color(0, 0, 0, 0.8f);
+            GUI.Label(new Rect(coinRect.x + 2, coinRect.y + 2, coinRect.width, coinRect.height), coinText, coinStyle);
+            GUI.color = new Color(1f, 0.82f, 0.3f);
+            GUI.Label(coinRect, coinText, coinStyle);
+        }
+
+        if (Cursor.lockState != CursorLockMode.Locked && !PauseMenu.IsPaused && !InventoryScreen.IsOpen && !Shopkeeper.IsShopOpen)
         {
             var small = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Screen.height / 60), alignment = TextAnchor.MiddleCenter };
             GUI.color = new Color(1f, 1f, 1f, 0.7f);
