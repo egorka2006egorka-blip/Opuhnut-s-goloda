@@ -128,6 +128,60 @@ public static class ItemDatabase
         return d != null ? ordered.IndexOf(d) : int.MaxValue;
     }
 
+    // ---------- Оружие в инвентаре ----------
+
+    const string WeaponPrefix = "weapon:";
+    static readonly Dictionary<string, WeaponPickup> weaponOwners = new Dictionary<string, WeaponPickup>();
+
+    /// <summary>Предмет-оружие (раздел «Снаряжение»): само оружие — WeaponFor(id).</summary>
+    public static bool IsWeapon(string id) => id != null && id.StartsWith(WeaponPrefix);
+
+    public static WeaponPickup WeaponFor(string id) => id != null && weaponOwners.TryGetValue(id, out var w) && w != null ? w : null;
+
+    /// <summary>Заводит вид предмета для оружия: название, раздел «Снаряжение» и модель для иконки — копия его мешей.</summary>
+    public static string RegisterWeapon(WeaponPickup w)
+    {
+        Ensure();
+        string baseId = WeaponPrefix + w.displayName, id = baseId;
+        for (int n = 2; weaponOwners.TryGetValue(id, out var other) && other != null && other != w; n++) id = baseId + "#" + n;
+        weaponOwners[id] = w;
+
+        // Снимок мешей относительно корня оружия (видимых сейчас — без спрятанного патрона в руке и т.п.).
+        var parts = new List<(Mesh mesh, Material[] mats, Matrix4x4 m)>();
+        Matrix4x4 toRoot = w.transform.worldToLocalMatrix;
+        foreach (var r in w.GetComponentsInChildren<Renderer>())
+        {
+            if (!r.enabled) continue;
+            Mesh mesh = r is SkinnedMeshRenderer smr ? smr.sharedMesh : r is MeshRenderer ? r.GetComponent<MeshFilter>()?.sharedMesh : null;
+            if (mesh == null) continue;
+            parts.Add((mesh, r.sharedMaterials, toRoot * r.transform.localToWorldMatrix));
+        }
+
+        if (!defs.TryGetValue(id, out var def))
+        {
+            def = new ItemDef { id = id };
+            Add(def);
+        }
+        def.name = w.displayName;
+        def.category = ItemCategory.Gear;
+        def.unit = "";
+        def.description = w.melee ? "Оружие ближнего боя." : "Огнестрельное оружие.";
+        def.build = t =>
+        {
+            foreach (var p in parts)
+            {
+                var go = new GameObject("Part");
+                go.transform.SetParent(t, false);
+                go.transform.localPosition = p.m.GetColumn(3);
+                go.transform.localRotation = p.m.rotation;
+                go.transform.localScale = p.m.lossyScale;
+                go.AddComponent<MeshFilter>().sharedMesh = p.mesh;
+                go.AddComponent<MeshRenderer>().sharedMaterials = p.mats;
+            }
+        };
+        return id;
+    }
+
     /// <summary>Какие патроны нужны оружию (по полю ammoType, а если оно пустое — по типу и названию).</summary>
     public static string AmmoFor(WeaponPickup w)
     {

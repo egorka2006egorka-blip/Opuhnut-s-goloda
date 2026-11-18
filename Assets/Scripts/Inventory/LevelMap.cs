@@ -10,6 +10,8 @@ public class LevelMap
     public Texture2D Texture { get; private set; }
     /// <summary>Мировые границы снимка по X и Z.</summary>
     public Rect WorldRect { get; private set; }
+    /// <summary>Высота пола этажа, с которого снята карта.</summary>
+    public float Floor { get; private set; }
 
     const int MaxSide = 1024;
     /// <summary>На сколько метров над полом стоит камера: ниже потолка (~3.1 м), выше столов и стоек.</summary>
@@ -77,6 +79,7 @@ public class LevelMap
         Texture = Stylize(shot);
         Object.Destroy(shot);
         WorldRect = world;
+        Floor = floor;
     }
 
     static bool IsDynamic(Transform t, Transform player)

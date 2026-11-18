@@ -11,8 +11,11 @@ public class ZombieSpawner : MonoBehaviour
 {
     /// <summary>Спавнер сцены (для босса, который призывает зомби).</summary>
     public static ZombieSpawner Instance { get; private set; }
-    /// <summary>Тип агента NavMesh, под который запечён NavMesh (нужен боссу). -1 — NavMesh ещё не запечён.</summary>
+    /// <summary>Тип агента NavMesh, под который запечён NavMesh (нужен боссу). Смотреть только при NavMeshReady:
+    /// идентификаторы типов агентов, созданных из кода (NavMesh.CreateSettings), бывают и отрицательными.</summary>
     public static int AgentTypeId { get; private set; } = -1;
+    /// <summary>NavMesh запечён — AgentTypeId действителен.</summary>
+    public static bool NavMeshReady { get; private set; }
 
     [Tooltip("Модели зомби (Assets/Characters/Zombies/Models/Zombie_*.fbx). Для каждого нового зомби выбирается случайная.")]
     public GameObject[] zombiePrefabs;
@@ -125,13 +128,14 @@ public class ZombieSpawner : MonoBehaviour
         if (data == null) { Debug.LogWarning("ZombieSpawner: не удалось построить NavMesh."); return; }
         navMesh = NavMesh.AddNavMeshData(data);
         AgentTypeId = agentTypeId;
+        NavMeshReady = true;
         Debug.Log($"ZombieSpawner: NavMesh запечён за {(Time.realtimeSinceStartup - t0):0.00} с ({sources.Count} объектов).");
     }
 
     void OnDestroy()
     {
         if (navMesh.valid) NavMesh.RemoveNavMeshData(navMesh);
-        if (Instance == this) { Instance = null; AgentTypeId = -1; }
+        if (Instance == this) { Instance = null; AgentTypeId = -1; NavMeshReady = false; }
     }
 
     /// <summary>Зомби в ближайшей к pos точке NavMesh (для призыва боссом). null — некуда поставить.</summary>

@@ -24,12 +24,14 @@ public static class SaveSystem
         public bool held;
         /// <summary>Ещё не куплено у продавщицы (с версии 4).</summary>
         public bool forSale;
+        /// <summary>Лежит в инвентаре игрока (с версии 6).</summary>
+        public bool stowed;
     }
 
     [Serializable]
     public class SaveData
     {
-        public int version = 5;
+        public int version = 6;
         public string scene;
         public string savedAt;
         public long savedTicks;
@@ -166,6 +168,7 @@ public static class SaveSystem
                 ammo = w.Ammo,
                 held = handler != null && handler.CurrentWeapon == w,
                 forSale = w.forSale,
+                stowed = w.Stowed,
             });
         }
 
@@ -237,6 +240,7 @@ public static class SaveSystem
             w.SetAmmo(s.ammo);
             if (data.version >= 4) w.forSale = s.forSale && !s.held;
             if (s.held) { toEquip = w; continue; }
+            if (s.stowed) { w.forSale = false; w.Stow(fpc.transform); continue; }
             var rb = w.GetComponent<Rigidbody>();
             if (rb != null && !rb.isKinematic) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
             w.transform.SetPositionAndRotation(s.position, s.rotation);

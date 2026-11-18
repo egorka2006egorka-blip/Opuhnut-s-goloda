@@ -363,11 +363,6 @@ public static class MenuUI
 
         if (SelectorRow(RowRect(inner, 3), "Вертикальная синхронизация", GameSettings.VSync ? "Вкл" : "Выкл") != 0)
             GameSettings.SetVSync(!GameSettings.VSync);
-
-#if UNITY_EDITOR
-        var note = RowRect(inner, 5);
-        GUI.Label(note, "В редакторе разрешение и режим экрана не меняются — только в собранной игре.", small);
-#endif
     }
 
     static void SoundTab(Rect inner)
@@ -414,8 +409,6 @@ public static class MenuUI
             else if (GUI.Button(br, Controls.KeyName(a), buttonCenter) && rebinding == null)
                 rebinding = a;
         }
-        GUI.Label(new Rect(inner.x, inner.yMax - S(28), inner.width, S(28)),
-            rebinding != null ? "Esc — отмена" : "Нажмите на клавишу, чтобы назначить другую. Занятая клавиша поменяется местами.", small);
     }
 
     static float SliderRow(Rect r, string text, float v, float min, float max, string valueText)

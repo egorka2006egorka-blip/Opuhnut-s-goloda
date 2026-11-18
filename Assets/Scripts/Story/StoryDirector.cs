@@ -54,7 +54,7 @@ public class StoryDirector : MonoBehaviour
     public float stairsY = -1.5f;
 
     [Header("Волны")]
-    public float breakTime = 40f;
+    public float breakTime = 30f;
 
     Stage stage = Stage.Intro;
     public Stage CurrentStage => stage;
@@ -94,9 +94,9 @@ public class StoryDirector : MonoBehaviour
 
     static readonly WaveDef[] Waves =
     {
-        new WaveDef { title = "«Зачётные»", count = 7, maxAlive = 5, health = 100f, speed = 1f, interval = 2.5f, scale = 1f, coins = new Vector2Int(3, 7), barks = new[] { "zombie_1", "zombie_2", "zombie_3" } },
-        new WaveDef { title = "«Бегуны-опоздуны»", count = 9, maxAlive = 6, health = 55f, speed = 2.2f, interval = 1.5f, scale = 0.95f, coins = new Vector2Int(2, 5), barks = new[] { "runner_1", "runner_2" } },
-        new WaveDef { title = "«Старосты»", count = 6, maxAlive = 4, health = 260f, speed = 0.8f, interval = 3f, scale = 1.15f, coins = new Vector2Int(7, 13), barks = new[] { "starosta_1", "starosta_2" } },
+        new WaveDef { title = "«Зачётные»", count = 7, maxAlive = 5, health = 100f, speed = 1f, interval = 2.5f, scale = 1f, coins = new Vector2Int(4, 9), barks = new[] { "zombie_1", "zombie_2", "zombie_3" } },
+        new WaveDef { title = "«Бегуны-опоздуны»", count = 9, maxAlive = 6, health = 55f, speed = 2.2f, interval = 1.5f, scale = 0.95f, coins = new Vector2Int(3, 7), barks = new[] { "runner_1", "runner_2" } },
+        new WaveDef { title = "«Старосты»", count = 6, maxAlive = 4, health = 260f, speed = 0.8f, interval = 3f, scale = 1.15f, coins = new Vector2Int(9, 16), barks = new[] { "starosta_1", "starosta_2" } },
     };
 
     // ---------- Запуск ----------
@@ -355,7 +355,6 @@ public class StoryDirector : MonoBehaviour
         Lock(false);
         hum.volume *= 0.5f;
         SetStage(Stage.MeetGalya);
-        Hint("WASD — ходить, мышь — осмотреться, " + Controls.KeyName(GameAction.Interact) + " — взаимодействовать", 8f);
     }
 
     /// <summary>Галя объясняет, что происходит.</summary>
@@ -555,9 +554,9 @@ public class StoryDirector : MonoBehaviour
         "<size=220%><b>Opuhnut-s-goloda</b></size>",
         "<size=120%>Часть первая: «Пересдача»</size>", "", "",
         "<size=130%><b>Разработчики</b></size>", "",
-        Dev("nadeev", "<b>Надеев Алексей</b>\nмаленький кучерявый разработчик"),
+        Dev("kolesnikov", "<b>Надеев Алексей</b>\nмаленький кучерявый разработчик"),
         Dev("lipatov", "<b>Липатов Егор</b>\nсредний кучерявый разработчик"),
-        Dev("kolesnikov", "<b>Колесников Арсений</b>\nбольшой волосатый разработчик"), "",
+        Dev("nadeev", "<b>Колесников Арсений</b>\nбольшой волосатый разработчик"), "",
         "<b>В ролях</b>",
         "Студент — ты, третий курс, проспал апокалипсис",
         "Галя — тридцать лет на раздаче",
@@ -608,6 +607,26 @@ public class StoryDirector : MonoBehaviour
         hintUntil = Time.time + seconds;
     }
 
+    /// <summary>Текущее задание (для карты в инвентаре); null — задания сейчас нет.</summary>
+    public static string Objective => Instance != null ? Instance.objective : null;
+    /// <summary>Точка текущего задания в мире (для метки на карте); null — метки нет.</summary>
+    public static Vector3? ObjectiveTarget => Instance != null && !string.IsNullOrEmpty(Instance.objective) ? Instance.MapTarget() : null;
+
+    /// <summary>Метка на карте: как на экране, плюс цели, которые на экране не отмечаются (прилавок в волну, Декан в бою).</summary>
+    Vector3? MapTarget()
+    {
+        var t = MarkerTarget();
+        if (t.HasValue) return t;
+        switch (stage)
+        {
+            case Stage.Wave1: case Stage.Wave2: case Stage.Wave3:
+                return galya != null ? galya.transform.position : (Vector3?)null;
+            case Stage.BossFight:
+                return boss != null && !boss.IsDead ? boss.transform.position : basementEntrance;
+        }
+        return null;
+    }
+
     Vector3? MarkerTarget()
     {
         switch (stage)
@@ -615,14 +634,14 @@ public class StoryDirector : MonoBehaviour
             case Stage.MeetGalya: case Stage.Break1: case Stage.Break2:
                 return galya != null ? galya.transform.position + Vector3.up * 1.9f : (Vector3?)null;
             case Stage.GetPistol:
-                return pistol != null && !pistol.IsHeld ? pistol.transform.position + Vector3.up * 0.3f : (Vector3?)null;
+                return pistol != null && !pistol.IsHeld && !pistol.Stowed ? pistol.transform.position + Vector3.up * 0.3f : (Vector3?)null;
             case Stage.GetRadio:
                 return radio != null ? radio.transform.position + Vector3.up * 0.25f : (Vector3?)null;
             case Stage.GoBasement:
                 return fpc != null && fpc.transform.position.y > stairsY + 0.5f ? stairsTop + Vector3.up * 1.2f : basementEntrance + Vector3.up * 1.2f;
             case Stage.GetCrowbar:
                 var crowbar = CrowbarWeapon.Find();
-                return crowbar != null && !crowbar.IsHeld ? crowbar.transform.position + Vector3.up * 0.4f : (Vector3?)null;
+                return crowbar != null && !crowbar.IsHeld && !crowbar.Stowed ? crowbar.transform.position + Vector3.up * 0.4f : (Vector3?)null;
             case Stage.OpenDoor:
                 return shapikCage != null ? shapikCage.Focus + Vector3.up * 0.3f : (Vector3?)null;
             case Stage.FindShapik:
@@ -693,13 +712,34 @@ public class StoryDirector : MonoBehaviour
             Vector3 sp = camera.WorldToScreenPoint(target.Value);
             bool behind = sp.z < 0f;
             if (behind) { sp.x = W - sp.x; sp.y = 0f; }
-            float m = 40f;
-            float x = Mathf.Clamp(sp.x, m, W - m), y = Mathf.Clamp(H - sp.y, m + H * 0.1f, H - m - H * 0.12f);
+            // Размеры — от высоты экрана (при 1080p ромб 18 px), чтобы метка не менялась с разрешением.
+            float s = H / 1080f;
+            float d = Mathf.Max(10f, 18f * s);           // сторона ромба
+            float labelH = Mathf.Max(16f, 26f * s);
+            float m = d + 8f * s;
+            float x = Mathf.Clamp(sp.x, m, W - m);
+            float y = Mathf.Clamp(H - sp.y, m + H * 0.1f, H - m - labelH - H * 0.12f);
             float dist = Vector3.Distance(cam.position, target.Value);
-            var st = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(14, (int)(H / 40f)), alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
             float pulse = 0.75f + 0.25f * Mathf.Sin(Time.time * 4f);
-            GUI.color = shadow; GUI.Label(new Rect(x - 59, y - 19, 120, 40), "◆\n" + Mathf.RoundToInt(dist) + " м", st);
-            GUI.color = new Color(1f, 0.85f, 0.3f, pulse); GUI.Label(new Rect(x - 60, y - 20, 120, 40), "◆\n" + Mathf.RoundToInt(dist) + " м", st);
+            var gold = new Color(1f, 0.85f, 0.3f, pulse);
+
+            // Ромб точно над целью: тёмная обводка и жёлтая заливка.
+            var center = new Vector2(x, y);
+            var gm = GUI.matrix;
+            GUIUtility.RotateAroundPivot(45f, center);
+            float o = Mathf.Max(1.5f, 2.5f * s);
+            GUI.color = new Color(0f, 0f, 0f, 0.8f * pulse);
+            GUI.DrawTexture(new Rect(x - d / 2f - o, y - d / 2f - o, d + o * 2f, d + o * 2f), Texture2D.whiteTexture);
+            GUI.color = gold;
+            GUI.DrawTexture(new Rect(x - d / 2f, y - d / 2f, d, d), Texture2D.whiteTexture);
+            GUI.matrix = gm;
+
+            // Расстояние — под ромбом.
+            var st = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Mathf.RoundToInt(20f * s)), alignment = TextAnchor.UpperCenter, fontStyle = FontStyle.Bold };
+            var lr = new Rect(x - 60f * s, y + d * 0.75f + 2f * s, 120f * s, labelH);
+            string distText = Mathf.RoundToInt(dist) + " м";
+            GUI.color = shadow; GUI.Label(new Rect(lr.x + 1.5f, lr.y + 1.5f, lr.width, lr.height), distText, st);
+            GUI.color = gold; GUI.Label(lr, distText, st);
         }
         GUI.color = Color.white;
     }

@@ -18,6 +18,7 @@ public class InventoryScreen : MonoBehaviour
 
     Inventory inventory;
     PlayerHealth health;
+    PlayerWeaponHandler weapons;
     readonly HealthPanel healthPanel = new HealthPanel();
     readonly ItemPreviewStage stage = new ItemPreviewStage();
     readonly LevelMap map = new LevelMap();
@@ -36,6 +37,7 @@ public class InventoryScreen : MonoBehaviour
     {
         inventory = GetComponent<Inventory>();
         health = GetComponent<PlayerHealth>();
+        weapons = GetComponent<PlayerWeaponHandler>();
     }
 
     void OnDisable()
@@ -76,6 +78,8 @@ public class InventoryScreen : MonoBehaviour
         openTime = Time.unscaledTime;
         spin = -35f;
         FirstPersonController.LockCursor(false);
+        // Карта снимается с этажа игрока: спустился в подвал (или поднялся обратно) — снимаем заново.
+        if (map.Ready && Mathf.Abs(transform.position.y - map.Floor) > 2.5f) map.Dispose();
         if (!map.Ready) map.Capture(transform);
     }
 
@@ -109,7 +113,7 @@ public class InventoryScreen : MonoBehaviour
         if (!IsOpen || inventory == null || tab == Tab.Map) return;
         CollectVisible();
         stage.PrepareIcons(visible);
-        if (selected != null && inventory.Count(selected) <= 0) selected = null;
+        if (selected != null && CountOf(selected) <= 0) selected = null;
         if (selected == null && visible.Count > 0) selected = visible[0].id;
         if (selected != null && !visible.Exists(s => s.id == selected)) selected = visible.Count > 0 ? visible[0].id : null;
         if (selected != null)
@@ -124,6 +128,10 @@ public class InventoryScreen : MonoBehaviour
         visible.Clear();
         if (inventory == null) return;
         var cat = tab == Tab.Important ? ItemCategory.Important : ItemCategory.Gear;
+        // Оружие игрока (в руках и купленное/подобранное про запас) — первым в «Снаряжении».
+        if (cat == ItemCategory.Gear && weapons != null)
+            foreach (var w in WeaponPickup.All)
+                if (weapons.Owns(w)) visible.Add(new Inventory.Stack(w.ItemId, 1));
         foreach (var s in inventory.Items)
         {
             var d = ItemDatabase.Get(s.id);
@@ -149,9 +157,6 @@ public class InventoryScreen : MonoBehaviour
             var r = new Rect(tabsX + i * (tabW + tabGap), tabsY, tabW, tabH);
             if (MenuUI.Tab(r, (i + 1) + "  " + TabNames[i], (int)tab == i)) tab = (Tab)i;
         }
-        var hint = new GUIStyle(MenuUI.Small) { alignment = TextAnchor.MiddleRight };
-        GUI.Label(new Rect(0, tabsY, Screen.width - MenuUI.S(40), tabH),
-            "[" + Controls.KeyName(GameAction.Inventory) + "] — закрыть", hint);
 
         // Область содержимого — между вкладками и блоком здоровья.
         float bottomBlock = MenuUI.S(160) + MenuUI.S(60);
@@ -227,7 +232,8 @@ public class InventoryScreen : MonoBehaviour
         var title = new GUIStyle(MenuUI.Label) { fontStyle = FontStyle.Bold, fontSize = Mathf.RoundToInt(MenuUI.S(32)), wordWrap = true };
         GUI.Label(new Rect(infoRect.x + ip, y, infoRect.width - ip * 2f, MenuUI.S(44)), sd.name, title);
         y += MenuUI.S(46);
-        int count = inventory.Count(selected);
+        int count = CountOf(selected);
+        var weapon = ItemDatabase.WeaponFor(selected);
         if (sd.unit != "")
         {
             var cs = new GUIStyle(MenuUI.Label);
@@ -238,7 +244,26 @@ public class InventoryScreen : MonoBehaviour
         var desc = new GUIStyle(MenuUI.Label) { wordWrap = true, alignment = TextAnchor.UpperLeft, fontSize = Mathf.RoundToInt(MenuUI.S(22)) };
         desc.normal.textColor = new Color(MenuUI.TextColor.r, MenuUI.TextColor.g, MenuUI.TextColor.b, 0.8f);
         float buttonH = MenuUI.S(58);
-        GUI.Label(new Rect(infoRect.x + ip, y, infoRect.width - ip * 2f, infoRect.yMax - y - buttonH - ip), sd.description, desc);
+        string text = sd.description;
+        if (weapon != null)
+        {
+            bool inHands = weapons != null && weapons.CurrentWeapon == weapon;
+            text = (inHands ? "В руках." : "В рюкзаке.") + "  " + Shopkeeper.WeaponStats(weapon);
+            if (!weapon.melee && weapon.Ammo >= 0)
+                text += "\nВ магазине: " + weapon.Ammo + " / " + weapon.magazineSize + ",  в запасе: " + inventory.Count(ItemDatabase.AmmoFor(weapon));
+        }
+        GUI.Label(new Rect(infoRect.x + ip, y, infoRect.width - ip * 2f, infoRect.yMax - y - buttonH - ip), text, desc);
+
+        if (weapon != null && weapons != null)
+        {
+            bool inHands = weapons.CurrentWeapon == weapon;
+            var br = new Rect(infoRect.x + ip, infoRect.yMax - buttonH - ip * 0.75f, infoRect.width - ip * 2f, buttonH);
+            if (MenuUI.Button(br, inHands ? "Убрать в рюкзак" : "Взять в руки", true, MenuUI.ButtonCenterStyle))
+            {
+                if (inHands) { weapons.StowCurrent(); ShowToast(weapon.displayName + " — в рюкзаке"); }
+                else { weapons.EquipFromInventory(weapon); ShowToast(weapon.displayName + " — в руках"); }
+            }
+        }
 
         if (sd.heal > 0f)
         {
@@ -266,7 +291,7 @@ public class InventoryScreen : MonoBehaviour
             return;
         }
         float pad = MenuUI.S(16);
-        var area = new Rect(content.x + pad, content.y + pad, content.width - pad * 2f, content.height - pad * 2f - MenuUI.S(30));
+        var area = new Rect(content.x + pad, content.y + pad, content.width - pad * 2f, content.height - pad * 2f);
         // Размер карты целиком (масштаб 1) — вписана в область.
         float aspect = (float)map.Texture.width / map.Texture.height;
         float fitW = area.width, fitH = fitW / aspect;
@@ -323,7 +348,52 @@ public class InventoryScreen : MonoBehaviour
         GUI.DrawTexture(new Rect(p.x - a / 2f, p.y - a / 2f, a, a), Arrow(false));
         GUI.matrix = m;
         GUI.color = Color.white;
+
+        // Метка главного задания: жёлтый ромб с кольцом; если цель за краем видимой области — ромб у края.
+        var objective = StoryDirector.ObjectiveTarget;
+        if (objective.HasValue)
+        {
+            Vector2 uv = map.ToUV(objective.Value);
+            var q = new Vector2(r.x + uv.x * r.width, r.yMax - uv.y * r.height);
+            float edge = MenuUI.S(22);
+            q.x = Mathf.Clamp(q.x, edge, area.width - edge);
+            q.y = Mathf.Clamp(q.y, edge, area.height - edge);
+            float qp = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 3f);
+            float qring = MenuUI.S(34) + MenuUI.S(16) * qp;
+            GUI.color = new Color(1f, 0.8f, 0.2f, 0.45f * (1f - qp * 0.6f));
+            GUI.DrawTexture(new Rect(q.x - qring / 2f, q.y - qring / 2f, qring, qring), Arrow(true));
+            float d = MenuUI.S(26);
+            var qm = GUI.matrix;
+            GUIUtility.RotateAroundPivot(45f, q);
+            GUI.color = new Color(0.1f, 0.07f, 0.02f, 1f);
+            GUI.DrawTexture(new Rect(q.x - d / 2f - MenuUI.S(3), q.y - d / 2f - MenuUI.S(3), d + MenuUI.S(6), d + MenuUI.S(6)), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 0.82f, 0.25f, 1f);
+            GUI.DrawTexture(new Rect(q.x - d / 2f, q.y - d / 2f, d, d), Texture2D.whiteTexture);
+            GUI.matrix = qm;
+            // Цель на другом этаже — стрелка-подпись «выше» / «ниже».
+            float dy = objective.Value.y - map.Floor;
+            if (Mathf.Abs(dy) > 2.5f)
+            {
+                var ls = new GUIStyle(MenuUI.Small) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold, wordWrap = false };
+                ls.normal.textColor = new Color(1f, 0.85f, 0.3f);
+                MenuUI.ShadowLabel(new Rect(q.x - MenuUI.S(80), q.y + d * 0.8f, MenuUI.S(160), MenuUI.S(28)), dy < 0f ? "▼ этажом ниже" : "▲ этажом выше", ls);
+            }
+            GUI.color = Color.white;
+        }
         GUI.EndGroup();
+
+        // Текущее задание — в левом верхнем углу карты.
+        string task = StoryDirector.Objective;
+        if (!string.IsNullOrEmpty(task))
+        {
+            var ts = new GUIStyle(MenuUI.Label) { fontStyle = FontStyle.Bold, fontSize = Mathf.RoundToInt(MenuUI.S(24)), wordWrap = true, alignment = TextAnchor.UpperLeft };
+            ts.normal.textColor = new Color(1f, 0.85f, 0.4f);
+            float tw = Mathf.Min(area.width * 0.6f, MenuUI.S(620));
+            float th = ts.CalcHeight(new GUIContent("◆ " + task), tw) + MenuUI.S(16);
+            var tr = new Rect(area.x + MenuUI.S(10), area.y + MenuUI.S(10), tw + MenuUI.S(20), th);
+            MenuUI.Fill(tr, new Color(0f, 0f, 0f, 0.7f));
+            GUI.Label(new Rect(tr.x + MenuUI.S(10), tr.y + MenuUI.S(8), tw, th), "◆ " + task, ts);
+        }
 
         // Кнопки.
         var btn = MenuUI.ButtonCenterStyle;
@@ -335,10 +405,6 @@ public class InventoryScreen : MonoBehaviour
             mapCenter = playerUV;
             ClampMapCenter(area, fitW, fitH);
         }
-
-        var cap = new GUIStyle(MenuUI.Small) { alignment = TextAnchor.MiddleLeft };
-        GUI.Label(new Rect(content.x + pad, content.yMax - MenuUI.S(36), content.width - pad * 2f, MenuUI.S(30)),
-            "Красная стрелка — вы.   Колесо мыши — масштаб, зажать кнопку мыши и тянуть — сдвинуть карту.", cap);
     }
 
     /// <summary>Меняет масштаб в factor раз так, чтобы точка карты под pivot (экранные координаты) осталась на месте.</summary>
@@ -390,6 +456,13 @@ public class InventoryScreen : MonoBehaviour
             circle.Apply();
         }
         return round ? circle : arrow;
+    }
+
+    /// <summary>Сколько предметов этого вида у игрока (оружие — 1, если оно в руках или в инвентаре).</summary>
+    int CountOf(string id)
+    {
+        if (ItemDatabase.IsWeapon(id)) return weapons != null && weapons.Owns(ItemDatabase.WeaponFor(id)) ? 1 : 0;
+        return inventory != null ? inventory.Count(id) : 0;
     }
 
     void ShowToast(string text)

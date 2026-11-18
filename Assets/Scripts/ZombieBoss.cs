@@ -272,7 +272,8 @@ public class ZombieBoss : MonoBehaviour
 
     void EnsureAgent()
     {
-        if (agent != null || ZombieSpawner.AgentTypeId < 0) return;
+        // Не «AgentTypeId < 0»: id типа агента, созданного из кода, может быть отрицательным — из-за этого босс оставался без агента и стоял на месте.
+        if (agent != null || !ZombieSpawner.NavMeshReady) return;
         var filter = new NavMeshQueryFilter { agentTypeID = ZombieSpawner.AgentTypeId, areaMask = NavMesh.AllAreas };
         if (!NavMesh.SamplePosition(transform.position, out NavMeshHit hit, 3f, filter)) return;
         transform.position = hit.position;
@@ -347,7 +348,7 @@ public class ZombieBoss : MonoBehaviour
                     if (dv.sqrMagnitude > 0.05f) Face(dv, turnRate, dt);
                     else if (state == State.Chase) Face(toPlayer, turnRate, dt);
                 }
-                else if (state == State.Chase) Face(toPlayer, turnRate, dt);
+                else FallbackMove(dest, state == State.Chase ? 1.6f : 0.3f, toPlayer, dt);
 
                 if (state == State.Return)
                 {
@@ -377,6 +378,27 @@ public class ZombieBoss : MonoBehaviour
         float speed = v.magnitude / dt;
         if (state == State.Chase || state == State.Return || state == State.Charging)
             Locomotion(speed, dt, state == State.Charging);
+    }
+
+    /// <summary>Ходьба без NavMesh (если агента создать не удалось): прямо к цели, не выходя из арены и не проходя сквозь стены.</summary>
+    void FallbackMove(Vector3 dest, float stop, Vector3 toPlayer, float dt)
+    {
+        Vector3 to = dest - transform.position; to.y = 0f;
+        if (to.magnitude <= stop)
+        {
+            if (state == State.Chase) Face(toPlayer, turnRate, dt);
+            return;
+        }
+        Face(to, turnRate, dt);
+        Vector3 step = transform.forward * Mathf.Min(walkSpeed * Tempo * dt, to.magnitude - stop);
+        Vector3 from = transform.position + Vector3.up * 1.2f;
+        foreach (var h in Physics.SphereCastAll(from, 0.5f, step.normalized, step.magnitude + 0.1f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            if (h.transform.IsChildOf(transform) || (player != null && h.transform.IsChildOf(player))) continue;
+            if (h.rigidbody != null && !h.rigidbody.isKinematic) continue; // мелкие предметы расталкивает
+            return; // впереди стена
+        }
+        transform.position = ClampToArena(transform.position + step);
     }
 
     void ToChase(float cd = 0.8f)

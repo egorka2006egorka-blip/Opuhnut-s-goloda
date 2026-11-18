@@ -110,7 +110,7 @@ public class CrowbarGlow : MonoBehaviour
     void Update()
     {
         if (glow == null) return;
-        glow.enabled = weapon == null || !weapon.IsHeld;
+        glow.enabled = weapon == null || (!weapon.IsHeld && !weapon.Stowed);
         glow.intensity = 1.8f + Mathf.Sin(Time.time * 3f) * 0.7f;
     }
 }

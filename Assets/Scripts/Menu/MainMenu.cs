@@ -82,14 +82,6 @@ public class MainMenu : MonoBehaviour
                 else if (back) page = Page.Main;
                 break;
         }
-
-        if (page == Page.Main)
-        {
-            GUI.color = new Color(1f, 1f, 1f, 0.5f);
-            GUI.Label(new Rect(0, Screen.height - MenuUI.S(44), Screen.width, MenuUI.S(30)),
-                "В игре: Esc — пауза и сохранение, " + Controls.KeyName(GameAction.QuickSave) + " — быстрое сохранение", MenuUI.Small);
-            GUI.color = Color.white;
-        }
     }
 
     void DrawMain(float left, float top)

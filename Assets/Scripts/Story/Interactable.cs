@@ -14,6 +14,8 @@ public abstract class Interactable : MonoBehaviour
 
     public abstract string Prompt { get; }
     public virtual bool Available => true;
+    /// <summary>Нажатие E сейчас что-то делает. false — подсказка показывается без клавиши (просто пояснение).</summary>
+    public virtual bool Usable => true;
     public abstract void Interact(GameObject player);
 
     protected virtual void OnEnable() => All.Add(this);

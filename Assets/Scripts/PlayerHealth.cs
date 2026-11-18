@@ -109,25 +109,7 @@ public class PlayerHealth : MonoBehaviour
         if (SaveSystem.HideHud) return; // снимок экрана для сохранения — без интерфейса
         float frac = Mathf.Clamp01(Health / maxHealth);
 
-        // Полоса здоровья — снизу слева, над счётчиком патронов.
-        if (!IsDead && !StoryDirector.HideHud)
-        {
-            float bw = Mathf.Max(220f, Screen.height * 0.26f), bh = Mathf.Max(14f, Screen.height / 55f);
-            var bar = new Rect(24f, Screen.height - 84f - bh - 30f, bw, bh);
-            GUI.color = new Color(0f, 0f, 0f, 0.65f);
-            GUI.DrawTexture(new Rect(bar.x - 3f, bar.y - 3f, bar.width + 6f, bar.height + 6f), Texture2D.whiteTexture);
-            Color fill = Color.Lerp(new Color(0.85f, 0.12f, 0.08f), new Color(0.35f, 0.8f, 0.3f), Mathf.InverseLerp(0.25f, 0.8f, frac));
-            if (frac < 0.25f) fill *= 0.75f + 0.25f * Mathf.Sin(Time.time * 8f);
-            fill.a = 1f;
-            GUI.color = fill;
-            GUI.DrawTexture(new Rect(bar.x, bar.y, bar.width * frac, bar.height), Texture2D.whiteTexture);
-            var hpStyle = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(12, Mathf.RoundToInt(bh * 0.9f)), fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleLeft };
-            string hp = "ЗДОРОВЬЕ  " + Mathf.CeilToInt(Health) + " / " + Mathf.RoundToInt(maxHealth);
-            GUI.color = new Color(0f, 0f, 0f, 0.8f);
-            GUI.Label(new Rect(bar.x + 7f, bar.y - bh * 1.6f + 1f, bw, bh * 1.6f), hp, hpStyle);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(bar.x + 6f, bar.y - bh * 1.6f, bw, bh * 1.6f), hp, hpStyle);
-        }
+        // Полосы здоровья на экране нет: здоровье видно в инвентаре (HealthPanel) и по красным краям экрана.
 
         // Красные края экрана: вспышка при ударе и постоянное «кровавое» обрамление при низком здоровье.
         float low = Mathf.Clamp01((0.35f - frac) / 0.35f);

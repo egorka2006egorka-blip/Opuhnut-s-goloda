@@ -128,8 +128,46 @@ public class WeaponPickup : MonoBehaviour
     Vector3 handleRestPos;
     Vector3 handleBack;
 
+    // Место на прилавке (у оружия-товара): сюда оружие возвращается, если его продать Гале.
+    Transform homeParent;
+    Vector3 homePos;
+    Quaternion homeRot;
+    bool hasHome;
+    readonly List<(Rigidbody rb, bool kinematic)> homeBodies = new List<(Rigidbody, bool)>();
+
+    /// <summary>Оружие из магазина: его можно продать обратно, и оно вернётся на прилавок.</summary>
+    public bool CanReturnToShop => hasHome;
+
+    /// <summary>Вернуть проданное оружие на прилавок: снова товар, видно и с коллайдерами.</summary>
+    public void ReturnToShop()
+    {
+        if (!hasHome) return;
+        Unstow();
+        IsHeld = false;
+        transform.SetParent(homeParent, false);
+        transform.localPosition = homePos;
+        transform.localRotation = homeRot;
+        foreach (var c in GetComponentsInChildren<Collider>(true)) c.enabled = true;
+        foreach (var (rb, kinematic) in homeBodies)
+        {
+            if (rb == null) continue;
+            rb.isKinematic = kinematic;
+            if (!kinematic) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+        }
+        foreach (var r in GetComponentsInChildren<Renderer>(true)) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+        forSale = true;
+    }
+
     void Awake()
     {
+        if (price > 0)
+        {
+            hasHome = true;
+            homeParent = transform.parent;
+            homePos = transform.localPosition;
+            homeRot = transform.localRotation;
+            foreach (var rb in GetComponentsInChildren<Rigidbody>(true)) homeBodies.Add((rb, rb.isKinematic));
+        }
         Ammo = magazineSize;
         if (rackHandle != null)
         {
@@ -152,6 +190,52 @@ public class WeaponPickup : MonoBehaviour
 
     void OnEnable() => All.Add(this);
     void OnDisable() => All.Remove(this);
+
+    // ---------- Инвентарь ----------
+
+    string itemId;
+    /// <summary>Вид предмета этого оружия в инвентаре (раздел «Снаряжение»). Регистрируется при первом обращении.</summary>
+    public string ItemId => itemId ??= ItemDatabase.RegisterWeapon(this);
+
+    /// <summary>Оружие лежит в инвентаре игрока (не в руках и не в мире): скрыто и без коллайдеров.</summary>
+    public bool Stowed { get; private set; }
+    readonly List<Behaviour> stowHidden = new List<Behaviour>();
+    readonly List<Renderer> stowHiddenRenderers = new List<Renderer>();
+
+    /// <summary>Убрать оружие в инвентарь: оно едет с игроком (owner), но не видно и ни с чем не сталкивается.</summary>
+    public void Stow(Transform owner)
+    {
+        _ = ItemId; // модель для иконки снимается, пока оружие ещё видно
+        if (Stowed) return;
+        Stowed = true;
+        IsHeld = false;
+        foreach (var rb in GetComponentsInChildren<Rigidbody>(true))
+        {
+            if (!rb.isKinematic) { rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero; }
+            rb.isKinematic = true;
+        }
+        foreach (var c in GetComponentsInChildren<Collider>(true)) c.enabled = false;
+        stowHiddenRenderers.Clear();
+        foreach (var r in GetComponentsInChildren<Renderer>(true))
+            if (r.enabled) { r.enabled = false; stowHiddenRenderers.Add(r); }
+        stowHidden.Clear();
+        foreach (var l in GetComponentsInChildren<Light>(true))
+            if (l.enabled) { l.enabled = false; stowHidden.Add(l); }
+        transform.SetParent(owner, false);
+        transform.localPosition = new Vector3(0f, 0.9f, 0f);
+        transform.localRotation = Quaternion.identity;
+    }
+
+    /// <summary>Достать оружие из инвентаря (дальше его берёт в руки PlayerWeaponHandler).</summary>
+    public void Unstow()
+    {
+        if (!Stowed) return;
+        Stowed = false;
+        foreach (var r in stowHiddenRenderers) if (r != null) r.enabled = true;
+        foreach (var b in stowHidden) if (b != null) b.enabled = true;
+        stowHiddenRenderers.Clear();
+        stowHidden.Clear();
+    }
 
     public void SetHeld(bool held)
     {

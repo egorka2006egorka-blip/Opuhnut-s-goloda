@@ -32,13 +32,20 @@ public class ShapikCage : Interactable
         get
         {
             if (!CrowbarInHands)
-                return CrowbarWeapon.Find() != null ? "Клетка на замке — возьми лом в руки" : "Клетка на замке — нужен лом";
+            {
+                var crowbar = CrowbarWeapon.Find();
+                return crowbar == null ? "Клетка на замке — нужен лом"
+                    : crowbar.Stowed ? "Клетка на замке — достань лом из инвентаря (" + Controls.KeyName(GameAction.Inventory) + ")"
+                    : "Клетка на замке — возьми лом в руки";
+            }
             int n = Mathf.RoundToInt(hits);
             return "Сбить замок ломом — жми быстро! " + new string('|', n) + new string('.', Mathf.Max(0, hitsNeeded - n));
         }
     }
 
     public override bool Available => !IsOpen;
+    /// <summary>Без лома в руках E ничего не делает — подсказка без клавиши.</summary>
+    public override bool Usable => CrowbarInHands;
     public override Vector3 Focus => lockGroup != null ? lockGroup.position : transform.position + transform.forward * depth / 2f + Vector3.up * 1.1f;
 
     void Awake()

@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 
 /// <summary>
 /// Продавщица за прилавком столовой: продаёт оружие (оно лежит на прилавке и не берётся, пока не куплено),
-/// патроны, еду и аптечки за монеты, которые выпадают из зомби.
+/// патроны, еду и аптечки за монеты, которые выпадают из зомби. Покупает обратно то же самое дешевле (SellFactor).
 /// E на продавщице или на оружии-товаре — открыть магазин (игра на паузе), E или Esc — закрыть.
 /// Модель: если у объекта нет своей (дочерней с рендерерами), собирается из примитивов — женщина в форме буфетчицы.
 /// Объект ставит CanteenSceneBuilder; цены оружия — в WeaponPickup.price.
@@ -57,14 +57,19 @@ public class Shopkeeper : MonoBehaviour
     Transform playerCam;
     Inventory inventory;
     PlayerHealth playerHealth;
+    PlayerWeaponHandler weapons;
     float waveClock = -1f, nodClock = -1f;
     bool greeted, saidHello;
     float poorSaid = -100f;
     float breathe;
 
-    enum Tab { Weapons, Ammo, Food }
-    static readonly string[] TabNames = { "Оружие", "Патроны", "Еда и аптечки" };
+    enum Tab { Weapons, Ammo, Food, Sell }
+    static readonly string[] TabNames = { "Оружие", "Патроны", "Еда и аптечки", "Продать" };
     Tab tab;
+    Vector2 sellScroll;
+
+    /// <summary>Какую долю цены покупки Галя платит, когда покупает обратно.</summary>
+    const float SellFactor = 0.5f;
     WeaponPickup focus;
     string line, toast;
     float toastUntil, openTime;
@@ -172,6 +177,7 @@ public class Shopkeeper : MonoBehaviour
         if (fpc == null) return;
         inventory = fpc.GetComponent<Inventory>();
         playerHealth = fpc.GetComponent<PlayerHealth>();
+        weapons = fpc.GetComponent<PlayerWeaponHandler>();
         var cam = fpc.GetComponentInChildren<Camera>();
         playerCam = cam != null ? cam.transform : fpc.transform;
     }
@@ -189,6 +195,7 @@ public class Shopkeeper : MonoBehaviour
                 if (kb.digit1Key.wasPressedThisFrame) tab = Tab.Weapons;
                 if (kb.digit2Key.wasPressedThisFrame) tab = Tab.Ammo;
                 if (kb.digit3Key.wasPressedThisFrame) tab = Tab.Food;
+                if (kb.digit4Key.wasPressedThisFrame) tab = Tab.Sell;
             }
             if (Time.frameCount != openFrame && Controls.WasPressed(GameAction.Interact))
                 SetOpen(false);
@@ -213,8 +220,10 @@ public class Shopkeeper : MonoBehaviour
         if (w == null || !w.forSale) return;
         if (!Pay(w.price)) { Toast("Не хватает монет: нужно " + w.price + "."); Poor(); return; }
         w.forSale = false;
+        // Купленное оружие сразу уходит в инвентарь (раздел «Снаряжение»), оттуда его берут в руки.
+        if (inventory != null) w.Stow(inventory.transform);
         Thank();
-        Toast(w.displayName + " — ваше! Заберите с прилавка [" + Controls.KeyName(GameAction.Interact) + "].");
+        Toast(w.displayName + " — ваше! Лежит в инвентаре, раздел «Снаряжение» [" + Controls.KeyName(GameAction.Inventory) + "].");
     }
 
     void Buy(Offer o)
@@ -225,6 +234,52 @@ public class Shopkeeper : MonoBehaviour
         inventory.Add(o.itemId, o.count);
         Thank();
         Toast("Куплено: " + def.name + (o.count > 1 ? " ×" + o.count : "") + ". Лежит в инвентаре.");
+    }
+
+    // ---------- Продажа ----------
+
+    static int SellPrice(WeaponPickup w) => Mathf.Max(1, Mathf.FloorToInt(w.price * SellFactor));
+
+    /// <summary>Сколько штук товара продаётся за раз (пачка, как при покупке, или остаток) и за сколько монет.
+    /// Цена округляется вниз — продавать поштучно не выгоднее, чем пачкой.</summary>
+    int SellQuantity(Offer o, out int price)
+    {
+        int have = inventory != null ? inventory.Count(o.itemId) : 0;
+        int qty = Mathf.Min(have, Mathf.Max(1, o.count));
+        price = Mathf.FloorToInt(o.price * SellFactor * qty / Mathf.Max(1, o.count));
+        return qty;
+    }
+
+    bool CanSell(WeaponPickup w) =>
+        w != null && w.price > 0 && w.CanReturnToShop && weapons != null && weapons.Owns(w);
+
+    void Sell(WeaponPickup w)
+    {
+        if (!CanSell(w) || inventory == null) return;
+        if (weapons.CurrentWeapon == w) weapons.StowCurrent();
+        // Патроны из магазина оружия остаются у игрока.
+        if (!w.melee && w.Ammo > 0)
+        {
+            inventory.Add(ItemDatabase.AmmoFor(w), w.Ammo);
+            w.SetAmmo(0);
+        }
+        w.ReturnToShop();
+        int price = SellPrice(w);
+        inventory.Add(ItemDatabase.Coin, price);
+        Thank();
+        Toast("Продано: " + w.displayName + " — +" + price + " мон.");
+    }
+
+    void Sell(Offer o)
+    {
+        var def = ItemDatabase.Get(o.itemId);
+        if (def == null || inventory == null) return;
+        int qty = SellQuantity(o, out int price);
+        if (qty <= 0 || price <= 0) return;
+        inventory.Take(o.itemId, qty);
+        inventory.Add(ItemDatabase.Coin, price);
+        Thank();
+        Toast("Продано: " + def.name + (qty > 1 ? " ×" + qty : "") + " — +" + price + " мон.");
     }
 
     void Poor()
@@ -275,8 +330,9 @@ public class Shopkeeper : MonoBehaviour
         y += S(48);
 
         // Вкладки.
-        float tabW = (w - S(28)) / 3f, tabH = S(52);
-        for (int i = 0; i < 3; i++)
+        int tabs = TabNames.Length;
+        float tabW = (w - S(14) * (tabs - 1)) / tabs, tabH = S(52);
+        for (int i = 0; i < tabs; i++)
             if (MenuUI.Tab(new Rect(x0 + i * (tabW + S(14)), y, tabW, tabH), (i + 1) + "  " + TabNames[i], (int)tab == i)) tab = (Tab)i;
         y += tabH + S(18);
 
@@ -299,12 +355,13 @@ public class Shopkeeper : MonoBehaviour
                 if (ry + rowH > list.yMax) break;
                 string desc = WeaponDescription(wp);
                 bool sold = !wp.forSale;
-                int choice = Row(new Rect(list.x + pad, ry, list.width - pad * 2f, rowH), wp.displayName, desc, wp.price,
-                    sold ? "Куплено" : "Купить", !sold && Coins >= wp.price, wp == focus);
+                int choice = Row(new Rect(list.x + pad, ry, list.width - pad * 2f, rowH), wp.displayName, desc,
+                    wp.price + " мон.", Coins >= wp.price, sold ? "Куплено" : "Купить", !sold && Coins >= wp.price, wp == focus);
                 if (choice == 1) Buy(wp);
                 ry += rowH + S(10);
             }
         }
+        else if (tab == Tab.Sell) DrawSell(list, rowH, pad);
         else
         {
             foreach (var o in offers)
@@ -317,7 +374,8 @@ public class Shopkeeper : MonoBehaviour
                 string name = def.name + (o.count > 1 ? "  ×" + o.count : "");
                 string desc = def.description + (def.heal > 0f ? "  (+" + Mathf.RoundToInt(def.heal) + " к здоровью)" : "")
                               + (inventory != null ? "   В инвентаре: " + inventory.Count(o.itemId) : "");
-                if (Row(new Rect(list.x + pad, ry, list.width - pad * 2f, rowH), name, desc, o.price, "Купить", Coins >= o.price, false) == 1)
+                if (Row(new Rect(list.x + pad, ry, list.width - pad * 2f, rowH), name, desc, o.price + " мон.", Coins >= o.price,
+                        "Купить", Coins >= o.price, false) == 1)
                     Buy(o);
                 ry += rowH + S(10);
             }
@@ -330,12 +388,66 @@ public class Shopkeeper : MonoBehaviour
         }
         var hint = new GUIStyle(MenuUI.Small) { alignment = TextAnchor.MiddleCenter };
         GUI.Label(new Rect(0, Screen.height - S(50), Screen.width, S(36)),
-            "1–3 — разделы    [" + Controls.KeyName(GameAction.Interact) + "] или Esc — уйти от прилавка    Монеты выпадают из зомби", hint);
+            "1–4 — разделы    [" + Controls.KeyName(GameAction.Interact) + "] или Esc — уйти от прилавка    Монеты выпадают из зомби", hint);
         GUI.color = Color.white;
     }
 
+    /// <summary>Вкладка «Продать»: купленное у Гали оружие и то, что она продаёт, — за SellFactor от цены. Список прокручивается.</summary>
+    void DrawSell(Rect list, float rowH, float pad)
+    {
+        float S(float v) => MenuUI.S(v);
+        var rows = new List<(string name, string desc, int price, System.Action sell)>();
+
+        // Оружие в рюкзаке выключено и в WeaponPickup.All не попадает — ищем и у игрока.
+        var owned = new List<WeaponPickup>();
+        foreach (var wp in WeaponPickup.All) if (CanSell(wp)) owned.Add(wp);
+        if (weapons != null)
+            foreach (var wp in weapons.GetComponentsInChildren<WeaponPickup>(true))
+                if (CanSell(wp) && !owned.Contains(wp)) owned.Add(wp);
+        owned.Sort((a, b) => a.price.CompareTo(b.price));
+        foreach (var wp in owned)
+        {
+            var w = wp;
+            string desc = (weapons.CurrentWeapon == w ? "В руках. " : "В рюкзаке. ") + "Галя вернёт его на прилавок."
+                          + (!w.melee && w.Ammo > 0 ? " Патроны из магазина останутся у вас." : "");
+            rows.Add((w.displayName, desc, SellPrice(w), () => Sell(w)));
+        }
+        foreach (var o in offers)
+        {
+            var def = ItemDatabase.Get(o.itemId);
+            if (def == null || inventory == null || inventory.Count(o.itemId) <= 0) continue;
+            var offer = o;
+            int qty = SellQuantity(o, out int price);
+            string desc = "В инвентаре: " + inventory.Count(o.itemId) + (price <= 0 ? ".  Так мало Галя не возьмёт — нужно больше." : "");
+            rows.Add((def.name + (qty > 1 ? "  ×" + qty : ""), desc, price, () => Sell(offer)));
+        }
+
+        if (rows.Count == 0)
+        {
+            GUI.Label(list, "Продать нечего: Галя берёт оружие, патроны, еду и аптечки", MenuUI.LabelCenter);
+            return;
+        }
+
+        float step = rowH + S(10);
+        var view = new Rect(list.x + pad, list.y + pad, list.width - pad * 2f, list.height - pad * 2f);
+        float contentH = rows.Count * step - S(10);
+        bool scroll = contentH > view.height;
+        float rowW = view.width - (scroll ? S(24) : 0f);
+        sellScroll = GUI.BeginScrollView(view, sellScroll, new Rect(0, 0, rowW, contentH), false, false,
+            GUIStyle.none, scroll ? GUI.skin.verticalScrollbar : GUIStyle.none);
+        System.Action chosen = null;
+        for (int i = 0; i < rows.Count; i++)
+        {
+            var row = rows[i];
+            if (Row(new Rect(0, i * step, rowW, rowH), row.name, row.desc, "+" + row.price + " мон.", true, "Продать", row.price > 0, false) == 1)
+                chosen = row.sell;
+        }
+        GUI.EndScrollView();
+        chosen?.Invoke();
+    }
+
     /// <summary>Строка товара: название, описание, цена и кнопка. 1 — нажата кнопка.</summary>
-    int Row(Rect r, string name, string desc, int price, string button, bool enabled, bool highlight)
+    int Row(Rect r, string name, string desc, string priceText, bool priceOk, string button, bool enabled, bool highlight)
     {
         float S(float v) => MenuUI.S(v);
         MenuUI.Fill(r, highlight ? new Color(0.25f, 0.06f, 0.05f, 0.9f) : new Color(0.08f, 0.08f, 0.09f, 0.9f));
@@ -346,21 +458,25 @@ public class Shopkeeper : MonoBehaviour
         var descStyle = new GUIStyle(MenuUI.Small) { wordWrap = true, alignment = TextAnchor.UpperLeft, fontSize = Mathf.RoundToInt(S(19)) };
         GUI.Label(new Rect(r.x + S(18), r.y + S(44), r.width - bw - pw - S(40), r.height - S(46)), desc, descStyle);
         var priceStyle = new GUIStyle(MenuUI.Label) { fontStyle = FontStyle.Bold, fontSize = Mathf.RoundToInt(S(28)), alignment = TextAnchor.MiddleRight };
-        priceStyle.normal.textColor = Coins >= price ? new Color(1f, 0.82f, 0.3f) : new Color(1f, 0.4f, 0.32f);
-        GUI.Label(new Rect(r.xMax - bw - pw - S(24), r.y, pw, r.height), price + " мон.", priceStyle);
+        priceStyle.normal.textColor = priceOk ? new Color(1f, 0.82f, 0.3f) : new Color(1f, 0.4f, 0.32f);
+        GUI.Label(new Rect(r.xMax - bw - pw - S(24), r.y, pw, r.height), priceText, priceStyle);
         var br = new Rect(r.xMax - bw - S(14), r.y + (r.height - S(58)) / 2f, bw, S(58));
         return MenuUI.Button(br, button, enabled, MenuUI.ButtonCenterStyle) ? 1 : 0;
     }
 
-    static string WeaponDescription(WeaponPickup w)
+    /// <summary>Характеристики оружия (для магазина и инвентаря).</summary>
+    public static string WeaponStats(WeaponPickup w)
     {
+        if (w.melee) return "Ближний бой: урон " + Mathf.RoundToInt(w.meleeDamage) + ", ЛКМ — удар.";
         var fx = w.GetComponent<WeaponEffects>();
         string ammo = ItemDatabase.Get(ItemDatabase.AmmoFor(w))?.name ?? "";
         string mode = w.IsPumpAction ? "помповое" : w.automatic ? "автоматический огонь" : "одиночный огонь";
-        string dmg = fx != null ? "урон " + Mathf.RoundToInt(fx.Damage) + (fx.pellets > 1 ? " × " + fx.pellets + " дробин" : "") : "";
-        return mode + ", магазин " + w.magazineSize + ", " + dmg + ". Патроны: " + ammo + "."
-               + (w.forSale ? "" : "  Лежит на прилавке — подберите.");
+        string dmg = fx != null ? ", урон " + Mathf.RoundToInt(fx.Damage) + (fx.pellets > 1 ? " × " + fx.pellets + " дробин" : "") : "";
+        return mode + ", магазин " + w.magazineSize + dmg + ". Патроны: " + ammo + ".";
     }
+
+    static string WeaponDescription(WeaponPickup w) =>
+        WeaponStats(w) + (w.forSale ? "" : "  Куплено — лежит в инвентаре («Снаряжение»).");
 
     // ---------- Анимация ----------
 

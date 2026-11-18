@@ -132,7 +132,8 @@ public class PlayerWeaponHandler : MonoBehaviour
         lookItem = lookTarget == null && playerCamera != null ? ItemPickup.FindLook(playerCamera.transform, transform, pickupRange, pickupAngle) : null;
         lookStory = lookTarget == null && lookItem == null && playerCamera != null ? Interactable.FindLook(playerCamera.transform, transform) : null;
         lookGate = lookTarget == null && lookItem == null && lookStory == null ? FindLookGate() : null;
-        lookShop = lookTarget == null && lookItem == null && lookGate == null && lookStory == null && playerCamera != null
+        // С Галей можно торговать только после первой волны (до этого на неё не реагируем и не подсказываем E).
+        lookShop = lookTarget == null && lookItem == null && lookGate == null && lookStory == null && playerCamera != null && StoryDirector.ShopAllowed
             ? Shopkeeper.FindLook(playerCamera.transform, transform) : null;
         bool interact = locked && Controls.WasPressed(GameAction.Interact);
         if (interact && lookTarget != null && lookTarget.forSale)
@@ -791,7 +792,7 @@ public class PlayerWeaponHandler : MonoBehaviour
         float bestAngle = pickupAngle;
         foreach (var w in WeaponPickup.All)
         {
-            if (w == null || w.IsHeld) continue;
+            if (w == null || w.IsHeld || w.Stowed) continue;
             Vector3 center = WeaponCenter(w);
             Vector3 to = center - cam.position;
             float dist = to.magnitude;
@@ -834,9 +835,36 @@ public class PlayerWeaponHandler : MonoBehaviour
         if (weapon != null && weapon != CurrentWeapon) PickUp(weapon);
     }
 
+    /// <summary>Оружие игрока: в руках или в инвентаре (раздел «Снаряжение»).</summary>
+    public bool Owns(WeaponPickup w) => w != null && (w == CurrentWeapon || w.Stowed);
+
+    /// <summary>Взять в руки оружие из инвентаря; то, что было в руках, уходит в инвентарь.</summary>
+    public void EquipFromInventory(WeaponPickup w)
+    {
+        if (w == null || w == CurrentWeapon || !w.Stowed) return;
+        if (CurrentWeapon != null) StowCurrent();
+        w.Unstow();
+        // Оружие поднимается в кадр снизу.
+        w.transform.SetParent(weaponHolder, false);
+        w.transform.localPosition = new Vector3(0f, -0.35f, -0.05f);
+        w.transform.localRotation = Quaternion.Euler(35f, 0f, 0f);
+        PickUp(w);
+    }
+
+    /// <summary>Убрать оружие из рук в инвентарь.</summary>
+    public void StowCurrent()
+    {
+        var w = CurrentWeapon;
+        if (w == null) return;
+        Release();
+        w.Stow(transform);
+    }
+
     void PickUp(WeaponPickup weapon)
     {
-        if (CurrentWeapon != null) Drop(weapon.transform.position, weapon.transform.rotation);
+        // Прежнее оружие не бросается, а остаётся в инвентаре («Снаряжение»).
+        if (CurrentWeapon != null) StowCurrent();
+        if (weapon.Stowed) weapon.Unstow();
 
         CurrentWeapon = weapon;
         weapon.SetHeld(true);
@@ -847,19 +875,27 @@ public class PlayerWeaponHandler : MonoBehaviour
         pickupT = 0f;
     }
 
-    void Drop(Vector3 position, Quaternion rotation)
+    /// <summary>Оружие больше не в руках: сброс перезарядки, помпы и прицеливания.</summary>
+    void Release()
     {
         CancelReload();
         var w = CurrentWeapon;
         IsPumping = false;
         w.PumpPos = 0f;
         shellTilt = 0f;
+        swing = -1f;
         CurrentWeapon = null;
+        ArmedWeight = 0f;
+        hasAimPos = false;
+    }
+
+    void Drop(Vector3 position, Quaternion rotation)
+    {
+        var w = CurrentWeapon;
+        Release();
         w.transform.SetParent(null, true);
         w.transform.SetPositionAndRotation(position, rotation);
         w.SetHeld(false);
-        ArmedWeight = 0f;
-        hasAimPos = false;
     }
 
     /// <summary>Выбрасывает оружие из рук (G): оно летит вперёд по взгляду, кувыркаясь, и падает с физикой. Подобрать снова — E.</summary>
@@ -994,6 +1030,73 @@ public class PlayerWeaponHandler : MonoBehaviour
         }
     }
 
+    /// <summary>
+    /// Подсказка взаимодействия для того, на что смотрит игрок. usable — нажатие E что-то сделает
+    /// (иначе показывается только пояснение, без клавиши). false — подсказки нет.
+    /// </summary>
+    bool InteractPrompt(out string text, out bool usable)
+    {
+        text = null;
+        usable = true;
+        if (grabber != null && grabber.Held != null) return false; // предмет в руках: E держит его, другие подсказки мешают
+        if (lookTarget != null && lookTarget.forSale)
+        {
+            if (StoryDirector.ShopAllowed) text = "Купить: " + lookTarget.displayName + " — " + lookTarget.price + " мон.";
+            else { text = lookTarget.displayName + " — товар Гали, магазин откроется после первой волны"; usable = false; }
+        }
+        else if (lookTarget != null) text = (CurrentWeapon != null ? "Взять: " : "Взять в руки: ") + lookTarget.displayName;
+        else if (lookItem != null) text = "Подобрать: " + lookItem.Label;
+        else if (lookStory != null) { text = lookStory.Prompt; usable = lookStory.Usable; }
+        else if (lookGate != null)
+        {
+            if (lookGate.IsOpen) text = "Закрыть";
+            else if (lookGate.Locked) { text = "Заперто"; usable = false; }
+            else text = "Открыть";
+        }
+        else if (lookShop != null) text = "Магазин Гали";
+        return !string.IsNullOrEmpty(text);
+    }
+
+    static GUIStyle promptStyle, promptKeyStyle;
+
+    /// <summary>Подсказка под прицелом: клавиша в рамке (если key не null) и текст действия, на тёмной подложке.</summary>
+    static void DrawPrompt(float cx, float cy, string key, string text)
+    {
+        int fs = Mathf.Max(16, Screen.height / 42);
+        if (promptStyle == null || promptStyle.fontSize != fs)
+        {
+            promptStyle = new GUIStyle(GUI.skin.label) { fontSize = fs, alignment = TextAnchor.MiddleLeft, wordWrap = false, clipping = TextClipping.Overflow };
+            promptStyle.normal.textColor = Color.white;
+            promptKeyStyle = new GUIStyle(promptStyle) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold };
+            promptKeyStyle.normal.textColor = new Color(1f, 0.85f, 0.35f);
+        }
+        float h = fs * 1.9f, pad = fs * 0.6f, gap = fs * 0.5f;
+        float textW = Mathf.Min(promptStyle.CalcSize(new GUIContent(text)).x, Screen.width * 0.8f);
+        float keyW = key != null ? Mathf.Max(h * 0.9f, promptKeyStyle.CalcSize(new GUIContent(key)).x + fs * 0.8f) : 0f;
+        float w = pad * 2f + textW + (key != null ? keyW + gap : 0f);
+        var box = new Rect(cx - w / 2f, cy + Screen.height * 0.07f, w, h);
+
+        GUI.color = new Color(0f, 0f, 0f, 0.6f);
+        GUI.DrawTexture(box, Texture2D.whiteTexture);
+        float x = box.x + pad;
+        if (key != null)
+        {
+            var kr = new Rect(x, box.y + h * 0.14f, keyW, h * 0.72f);
+            float t = Mathf.Max(1f, fs / 12f);
+            GUI.color = new Color(1f, 0.85f, 0.35f, 0.9f);
+            GUI.DrawTexture(new Rect(kr.x, kr.y, kr.width, t), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(kr.x, kr.yMax - t, kr.width, t), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(kr.x, kr.y, t, kr.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(kr.xMax - t, kr.y, t, kr.height), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            GUI.Label(kr, key, promptKeyStyle);
+            x += keyW + gap;
+        }
+        GUI.color = key != null ? Color.white : new Color(1f, 1f, 1f, 0.75f);
+        GUI.Label(new Rect(x, box.y, textW, h), text, promptStyle);
+        GUI.color = Color.white;
+    }
+
     void OnGUI()
     {
         if (SaveSystem.HideHud || StoryDirector.HideHud) return; // снимок экрана для сохранения и титры — без интерфейса
@@ -1002,22 +1105,8 @@ public class PlayerWeaponHandler : MonoBehaviour
         GUI.color = new Color(1f, 1f, 1f, 0.85f * (1f - AimWeight));
         GUI.DrawTexture(new Rect(cx - 2, cy - 2, 4, 4), Texture2D.whiteTexture);
 
-        var style = new GUIStyle(GUI.skin.label) { fontSize = Mathf.Max(16, Screen.height / 40), alignment = TextAnchor.MiddleCenter };
-        if ((lookTarget != null || lookItem != null || lookGate != null || lookShop != null || lookStory != null) && Cursor.lockState == CursorLockMode.Locked && !FirstPersonController.InputLocked)
-        {
-            string key = "[" + Controls.KeyName(GameAction.Interact) + "]  ";
-            string text = lookTarget != null && lookTarget.forSale ? key + "Купить: " + lookTarget.displayName + " — " + lookTarget.price + " мон."
-                : lookTarget != null ? key + "Подобрать: " + lookTarget.displayName
-                : lookItem != null ? key + "Подобрать: " + lookItem.Label
-                : lookStory != null ? key + lookStory.Prompt
-                : lookShop != null ? key + "Поговорить с Галей (магазин)"
-                : lookGate.IsOpen ? key + "Закрыть" : lookGate.Locked ? key + "Открыть (заперто)" : key + "Открыть";
-            var rect = new Rect(cx - 300, cy + 40, 600, 40);
-            GUI.color = new Color(0, 0, 0, 0.8f);
-            GUI.Label(new Rect(rect.x + 2, rect.y + 2, rect.width, rect.height), text, style);
-            GUI.color = Color.white;
-            GUI.Label(rect, text, style);
-        }
+        if (Cursor.lockState == CursorLockMode.Locked && !FirstPersonController.InputLocked && InteractPrompt(out string action, out bool usable))
+            DrawPrompt(cx, cy, usable ? Controls.KeyName(GameAction.Interact) : null, action);
 
         // Счётчик патронов — снизу слева.
         if (CurrentWeapon != null && CurrentWeapon.Ammo >= 0 && !CurrentWeapon.melee)
@@ -1025,7 +1114,7 @@ public class PlayerWeaponHandler : MonoBehaviour
             int ammo = CurrentWeapon.Ammo;
             var ammoStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = Mathf.Max(28, Screen.height / 18),
+                fontSize = Mathf.Max(20, Screen.height / 27),
                 fontStyle = FontStyle.Bold,
                 alignment = TextAnchor.LowerLeft
             };

@@ -93,7 +93,7 @@ public class Zombie : MonoBehaviour
     [Tooltip("Вероятность, что после смерти останется аптечка.")]
     [Range(0f, 1f)] public float medkitDropChance = 0.1f;
     [Tooltip("Сколько монет выпадает после смерти (от и до).")]
-    public Vector2Int coinDrop = new Vector2Int(2, 7);
+    public Vector2Int coinDrop = new Vector2Int(3, 9);
 
     [Header("Голос")]
     [Tooltip("Реплики (id из Story/lines.json), которые зомби бормочет, подходя к игроку.")]
