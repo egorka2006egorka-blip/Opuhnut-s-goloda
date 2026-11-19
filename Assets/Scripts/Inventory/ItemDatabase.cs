@@ -110,7 +110,35 @@ public static class ItemDatabase
             description = "Твой студенческий. Без него не пустят ни в библиотеку, ни обратно в общагу.",
             build = t => BuildStudentCard(t),
         });
+
+        // Пасхалка: карточки из игры «Покажи, как…», разложены по столовой (CanteenCards).
+        const string set = "\n\nОдна из пяти карточек, разбросанных по столовой.";
+        AddCard(CardOwl, "owl", "Сова на скакалке",
+            "Карточка из игры «Покажи, как…»: изобрази сову, которая прыгает через скакалку. " +
+            "Судя по взгляду, эта сова не пропустила ни одной пары физкультуры." + set);
+        AddCard(CardDog, "dog", "Собака-гольфист",
+            "Карточка из игры «Покажи, как…»: изобрази собаку, которая играет в гольф. " +
+            "Кепка, клюшка и твёрдая уверенность, что мячик потом можно догнать и принести." + set);
+        AddCard(CardLion, "lion", "Лев-футболист",
+            "Карточка из игры «Покажи, как…»: изобрази льва, который играет в футбол. " +
+            "В лапе мяч для регби, под ногой футбольный — правила лев придумывает на ходу." + set);
+        AddCard(CardSkunk, "skunk", "Скунс-гонщик",
+            "Карточка из игры «Покажи, как…»: изобрази скунса за рулём гоночного болида. " +
+            "Облако за машиной — это не выхлоп. Обгонять не советуем." + set);
+        AddCard(CardTiger, "tiger", "Тигр-фокусник",
+            "Карточка из игры «Покажи, как…»: изобрази тигра-фокусника. " +
+            "Цилиндр, бабочка, карты веером — загадай любую, всё равно выпадет туз." + set);
     }
+
+    public const string CardOwl = "card_owl", CardDog = "card_dog", CardLion = "card_lion", CardSkunk = "card_skunk", CardTiger = "card_tiger";
+    /// <summary>Все карточки-пасхалки по порядку.</summary>
+    public static readonly string[] Cards = { CardOwl, CardDog, CardLion, CardSkunk, CardTiger };
+
+    static void AddCard(string id, string texture, string name, string description) => Add(new ItemDef
+    {
+        id = id, name = name, unit = "", category = ItemCategory.Important, description = description,
+        build = t => BuildCard(t, texture),
+    });
 
     static void Add(ItemDef d) { defs[d.id] = d; ordered.Add(d); }
 
@@ -395,6 +423,36 @@ public static class ItemDatabase
         Cyl(t, new Vector3(0.018f, 0.2f, 0f), 0.012f, 0.1f, body);
         Box(t, new Vector3(0f, 0.11f, 0.021f), new Vector3(0.045f, 0.05f, 0.002f), Mat(new Color(0.3f, 0.3f, 0.3f), 0.2f));
         Part(t, PrimitiveType.Sphere, new Vector3(-0.02f, 0.155f, 0.021f), Vector3.one * 0.008f, Mat(new Color(0.2f, 1f, 0.2f), 0.5f));
+    }
+
+    static readonly Dictionary<string, Material> cardFaces = new Dictionary<string, Material>();
+
+    /// <summary>
+    /// Карточка 63×88 мм (как игральная) лицом вверх: картинка — текстура Resources/Cards/&lt;texture&gt;,
+    /// края — белый картон, рубашка — фиолетовая.
+    /// </summary>
+    static void BuildCard(Transform t, string texture)
+    {
+        if (!cardFaces.TryGetValue(texture, out var face) || face == null)
+        {
+            var tex = Resources.Load<Texture2D>("Cards/" + texture);
+            // Матовая печать: чуть серее белого, без бликов и отражений неба — иначе под светом инвентаря картинка «светится».
+            face = RuntimeMaterials.Create(new Color(0.82f, 0.82f, 0.82f), 0f);
+            if (face.HasProperty("_SpecularHighlights")) { face.SetFloat("_SpecularHighlights", 0f); face.EnableKeyword("_SPECULARHIGHLIGHTS_OFF"); }
+            if (face.HasProperty("_EnvironmentReflections")) { face.SetFloat("_EnvironmentReflections", 0f); face.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF"); }
+            if (tex != null)
+            {
+                face.mainTexture = tex;
+                if (face.HasProperty("_BaseMap")) face.SetTexture("_BaseMap", tex);
+            }
+            else Debug.LogWarning("ItemDatabase: нет текстуры карточки Resources/Cards/" + texture);
+            cardFaces[texture] = face;
+        }
+        const float w = 0.063f, h = 0.088f, thick = 0.0012f;
+        Box(t, new Vector3(0f, thick / 2f, 0f), new Vector3(w, thick, h), Mat(new Color(0.95f, 0.95f, 0.93f), 0.2f));
+        // Quad смотрит в −Z; поворот на 90° по X — лицом вверх, верх картинки — к +Z.
+        Part(t, PrimitiveType.Quad, new Vector3(0f, thick + 0.0002f, 0f), new Vector3(w - 0.004f, h - 0.004f, 1f), face, new Vector3(90f, 0f, 0f));
+        Part(t, PrimitiveType.Quad, new Vector3(0f, -0.0002f, 0f), new Vector3(w - 0.004f, h - 0.004f, 1f), Mat(new Color(0.35f, 0.2f, 0.6f), 0.3f), new Vector3(-90f, 0f, 0f));
     }
 
     static void BuildStudentCard(Transform t)

@@ -72,6 +72,15 @@ public class Zombie : MonoBehaviour
     public float[] attackHitMoments = { 0.4f, 0.3f };
     [Tooltip("С какого расстояния зомби открывает закрытую дверь перед собой (м).")]
     public float doorOpenReach = 1.1f;
+    [Tooltip("Насколько дальше (м) зомби достаёт игрока, забравшегося выше (на стол): тянется и хватает за ноги.")]
+    public float elevatedReach = 0.7f;
+
+    // Игрок вне досягаемости по NavMesh (на столе) — зомби встают в ближайшей достижимой точке вокруг него.
+    float reach;
+    NavMeshPath reachPath;
+    float nextReachCheck;
+    Vector3 reachCheckPos, standPoint;
+    bool playerUnreachable, hasStandPoint;
 
     [Header("После смерти: прах")]
     [Tooltip("Когда тело начинает рассыпаться — доля длительности клипа смерти (тело уже упало).")]
@@ -121,6 +130,18 @@ public class Zombie : MonoBehaviour
     Transform hips, neck, head, jaw;
     readonly List<Collider> hitboxes = new List<Collider>();
     Quaternion jawRest;
+    ZombieDancer dancer; // пасхалка: танец по секретной кнопке (ZombieDance), если в контроллере нет клипа Dance
+    const string DanceState = "Dance"; // как ZombieAnimationSetup.Dance
+    bool dancing;
+    int hasDanceClip = -1; // -1 — ещё не проверяли
+    bool HasDanceClip
+    {
+        get
+        {
+            if (hasDanceClip < 0 && HasController) hasDanceClip = animator.HasState(0, Animator.StringToHash(DanceState)) ? 1 : 0;
+            return hasDanceClip == 1;
+        }
+    }
 
     // Длительности и скорости клипов (из контроллера).
     float walkClipSpeed = 1f, turnClipLength;
@@ -239,6 +260,7 @@ public class Zombie : MonoBehaviour
         animator.applyRootMotion = true; // root motion забирает ZombieAnimatorRelay — нужен только поворот из Turn
         animator.cullingMode = AnimatorCullingMode.AlwaysAnimate; // хитбоксы на костях должны двигаться и за спиной игрока
         model.gameObject.AddComponent<ZombieAnimatorRelay>().owner = this;
+        dancer = ZombieDancer.Create(animator, transform); // поза привязки запоминается сейчас, пока Animator не двигал кости
         ReadClips(controller);
         if (controller == null) Debug.LogWarning("Zombie: не задан Animator Controller (ZombieSpawner.zombieAnimator) — зомби будет в T-позе.");
 
@@ -247,7 +269,7 @@ public class Zombie : MonoBehaviour
 
         agent = gameObject.AddComponent<NavMeshAgent>();
         agent.agentTypeID = agentTypeId;
-        agent.radius = 0.28f; // меньше радиуса запекания NavMesh (0,35): от стен держатся, а в проходе расходятся друг с другом
+        agent.radius = 0.22f; // как радиус запекания NavMesh: в проходах между рядами стульев (~0,7 м) зомби протискиваются по одному
         agent.height = 1.8f;
         agent.baseOffset = 0f;
         moveSpeed = walkSpeed * speedMul;
@@ -429,6 +451,8 @@ public class Zombie : MonoBehaviour
 
         headFlinch = Mathf.MoveTowards(headFlinch, 0f, dt * 3f);
         stagger = Mathf.Max(0f, stagger - dt);
+        if (ZombieDance.Active) { DanceUpdate(dt); return; }
+        if (dancing) EndDance();
         if (barks != null && barks.Length > 0 && player != null && Time.time > nextBark)
         {
             nextBark = Time.time + Random.Range(6f, 13f);
@@ -453,7 +477,9 @@ public class Zombie : MonoBehaviour
             toPlayer = player.position - transform.position;
             float dy = toPlayer.y;
             toPlayer.y = 0f;
-            inRange = !playerDead && toPlayer.magnitude <= attackRange && Mathf.Abs(dy) < 1.5f;
+            // Игрок забрался выше (на стол, подоконник) — зомби тянется и хватает за ноги: достаёт дальше.
+            reach = attackRange + (dy > 0.35f ? elevatedReach : 0f);
+            inRange = !playerDead && toPlayer.magnitude <= reach && Mathf.Abs(dy) < 1.5f;
         }
 
         bool canMove = player != null && !playerDead;
@@ -500,7 +526,7 @@ public class Zombie : MonoBehaviour
                 {
                     attackHitDone = true;
                     // Удар достаёт, если игрок всё ещё рядом и не за стеной/дверью.
-                    if (!playerDead && player != null && toPlayer.magnitude <= attackRange * 1.25f && playerHealth != null && CanReach(player))
+                    if (!playerDead && player != null && toPlayer.magnitude <= reach * 1.25f && playerHealth != null && CanReach(player))
                         playerHealth.TakeDamage(attackIndex == 1 ? biteDamage : attackDamage, transform.position);
                 }
                 if (actClock >= actLength) EndAct();
@@ -526,6 +552,46 @@ public class Zombie : MonoBehaviour
     }
 
     /// <summary>
+    /// Танец по секретной кнопке: стоим на месте лицом к игроку. Есть клип Dance в контроллере (снят с видео) —
+    /// играем его, синхронно у всех зомби по часам танца; нет — позу строит ZombieDancer в LateUpdate.
+    /// </summary>
+    void DanceUpdate(float dt)
+    {
+        if (act != Act.Move) EndAct();
+        if (!dancing)
+        {
+            dancing = true;
+            if (HasDanceClip)
+            {
+                animator.speed = 1f;
+                animator.CrossFadeInFixedTime(DanceState, 0.25f, 0, ZombieDance.Clock);
+            }
+        }
+        if (agent != null && agent.isOnNavMesh) agent.isStopped = true;
+        stuckClock = 0f;
+        lastPos = transform.position;
+        move = Mathf.MoveTowards(move, 0f, dt * 4f);
+        if (HasController)
+        {
+            animator.SetFloat(MoveParam, move);
+            animator.SetFloat(WalkSpeedParam, 1f);
+        }
+        if (player != null)
+        {
+            Vector3 to = player.position - transform.position; to.y = 0f;
+            if (to.sqrMagnitude > 1e-4f)
+                transform.rotation = Quaternion.RotateTowards(transform.rotation, Quaternion.LookRotation(to), 220f * dt);
+        }
+    }
+
+    /// <summary>Танец кончился — обратно к обычной анимации.</summary>
+    void EndDance()
+    {
+        dancing = false;
+        if (HasDanceClip) animator.CrossFadeInFixedTime(locoState, 0.4f, 0);
+    }
+
+    /// <summary>
     /// Путь к игроку (кратчайший по NavMesh). Вблизи цель — своя точка у игрока со стороны подхода (со сдвигом flankAngle):
     /// зомби обступают игрока, а не давят друг друга в одной точке. Игрок вне NavMesh (на столе, в прыжке) — ближайшая к нему точка.
     /// </summary>
@@ -540,12 +606,62 @@ public class Zombie : MonoBehaviour
         }
         var filter = new NavMeshQueryFilter { agentTypeID = agent.agentTypeID, areaMask = agent.areaMask };
         if (NavMesh.SamplePosition(target, out NavMeshHit hit, 2.5f, filter)) target = hit.position;
+
+        // Игрок там, куда не дойти (на столе, на подоконнике; ближайшая точка NavMesh — «островок» на столешнице):
+        // встаём в ближайшей достижимой точке вокруг него, каждый со своей стороны, — а не топчемся у края.
+        if (Time.time >= nextReachCheck || (player.position - reachCheckPos).sqrMagnitude > 0.3f * 0.3f)
+        {
+            nextReachCheck = Time.time + 0.6f;
+            reachCheckPos = player.position;
+            playerUnreachable = !PathComplete(transform.position, target, filter);
+            hasStandPoint = playerUnreachable && StandPointNear(player.position, filter, out standPoint);
+        }
+        if (playerUnreachable && hasStandPoint) target = standPoint;
+
         if (Time.time >= unstickUntil) agent.SetDestination(target);
 
         // В проходе ближние к игроку главнее: дальние уступают им дорогу, а не упираются (меньше число — главнее).
         if (Time.time >= unstickUntil) agent.avoidancePriority = Mathf.Clamp(10 + Mathf.RoundToInt(dist * 4f), 10, 90);
         // Далеко от игрока путь меняется медленно — перестраиваем реже.
         nextRepath = Time.time + (dist > 15f ? repathInterval * 3f : repathInterval);
+    }
+
+    bool PathComplete(Vector3 from, Vector3 to, NavMeshQueryFilter filter)
+    {
+        reachPath ??= new NavMeshPath();
+        return NavMesh.CalculatePath(from, to, filter, reachPath) && reachPath.status == NavMeshPathStatus.PathComplete;
+    }
+
+    /// <summary>
+    /// Достижимая точка NavMesh вокруг недоступного игрока: как можно ближе к нему и со «своей» стороны
+    /// (направление подхода, повёрнутое на flankAngle), — зомби обступают стол, а не толпятся в одном месте.
+    /// </summary>
+    bool StandPointNear(Vector3 center, NavMeshQueryFilter filter, out Vector3 point)
+    {
+        point = default;
+        Vector3 from = transform.position - center; from.y = 0f;
+        Vector3 approach = from.sqrMagnitude > 1e-4f ? Quaternion.AngleAxis(flankAngle, Vector3.up) * from.normalized : transform.forward;
+        var candidates = new List<(float score, Vector3 p)>();
+        foreach (float r in new[] { 0.7f, 1.1f, 1.6f })
+            for (int k = 0; k < 12; k++)
+            {
+                Vector3 dir = Quaternion.AngleAxis(k * 30f, Vector3.up) * Vector3.forward;
+                if (!NavMesh.SamplePosition(center + dir * r, out NavMeshHit h, 0.5f, filter)) continue;
+                if (Mathf.Abs(h.position.y - center.y) > 1.5f) continue;
+                Vector3 d = h.position - center; d.y = 0f;
+                float score = d.magnitude + 0.35f * (1f - Vector3.Dot(dir, approach)); // ближе к игроку и со своей стороны
+                candidates.Add((score, h.position));
+            }
+        candidates.Sort((a, b) => a.score.CompareTo(b.score));
+        int tries = 0;
+        foreach (var c in candidates)
+        {
+            if (++tries > 6) break; // не больше 6 поисков пути за раз
+            if (!PathComplete(transform.position, c.p, filter)) continue;
+            point = c.p;
+            return true;
+        }
+        return false;
     }
 
     /// <summary>
@@ -798,11 +914,19 @@ public class Zombie : MonoBehaviour
         // Тело рассыпается: Animator выключен, поза замерла. Поправки ниже накапливались бы каждый кадр (голова крутилась бы).
         if (crumbling) return;
         float t = Time.time + timeOffset;
-        // В клипах Mixamo нет челюсти — отвисшая и подрагивающая челюсть добавляется здесь.
+        float dance = IsDead ? 0f : ZombieDance.Weight;
+        // В клипах Mixamo нет челюсти — отвисшая и подрагивающая челюсть добавляется здесь (в танце — сомкнута в ухмылке).
         if (jaw != null)
         {
             jaw.localRotation = jawRest;
-            jaw.rotation = Quaternion.AngleAxis(6f + Mathf.PerlinNoise(t * 1.7f, 0.3f) * 18f + (act == Act.Attack ? 8f : 0f), pivot.right) * jaw.rotation;
+            float open = 6f + Mathf.PerlinNoise(t * 1.7f, 0.3f) * 18f + (act == Act.Attack ? 8f : 0f);
+            jaw.rotation = Quaternion.AngleAxis(open * (1f - 0.9f * dance), pivot.right) * jaw.rotation;
+        }
+        if (dancer != null && !HasDanceClip)
+        {
+            var cam = Camera.main;
+            Vector3 eye = cam != null ? cam.transform.position : (player != null ? player.position + Vector3.up * 1.6f : transform.position + transform.forward * 3f);
+            dancer.Apply(dance, ZombieDance.Beat, eye, Time.deltaTime);
         }
         // Попадание в голову — голову откидывает от выстрела.
         if (head != null && headFlinch > 0f)

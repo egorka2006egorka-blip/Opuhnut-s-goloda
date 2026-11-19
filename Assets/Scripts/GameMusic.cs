@@ -102,7 +102,7 @@ public class GameMusic : MonoBehaviour
         float dt = Time.unscaledDeltaTime;
         mix = Mathf.MoveTowards(mix, InCombat() ? 1f : 0f, dt / Mathf.Max(0.1f, crossfadeTime));
         master = Mathf.MoveTowards(master, TargetMaster(), dt / 3f);
-        duck = Mathf.MoveTowards(duck, DialogueSystem.IsPlaying ? 0.55f : 1f, dt * 2f);
+        duck = Mathf.MoveTowards(duck, ZombieDance.Active ? 0.08f : DialogueSystem.IsPlaying ? 0.55f : 1f, dt * 2f); // под танец зомби — почти тишина
         float v = volume * master * duck * GameSettings.MusicVolume;
         // Равномощный переход: в середине не проваливается по громкости.
         ambient.volume = v * Mathf.Cos(mix * Mathf.PI / 2f);

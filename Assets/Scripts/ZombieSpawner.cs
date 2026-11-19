@@ -87,10 +87,16 @@ public class ZombieSpawner : MonoBehaviour
     {
         // Собственный тип агента: ступенька ниже, чем у стандартного Humanoid (0,75 м), — иначе зомби забираются на столы.
         var settings = NavMesh.CreateSettings();
-        settings.agentRadius = agentRadius;
+        // Радиус запекания не больше 0,22 м. Проходы между рядами столов (спинка к спинке стульев) — всего 0,68–0,87 м,
+        // дверные проёмы — ~0,9 м: с отступом 0,35 м от каждой стороны они закрывались, и зомби не проходили
+        // ни между столами, ни в двери (особенно в лестничных тоннелях подвала). Сейчас в самом узком проходе — 0,24 м.
+        settings.agentRadius = Mathf.Min(agentRadius, 0.22f);
         settings.agentHeight = 1.8f;
         settings.agentClimb = agentClimb;
-        settings.agentSlope = 46f; // пандус лестницы — 45°
+        settings.agentSlope = 50f; // пандус лестницы — ровно 45°: с запасом, чтобы пролёт не выпадал из NavMesh
+        // Мельче вокселы (по умолчанию радиус / 3 ≈ 0,1 м) — узкие проёмы не «съедаются» округлением.
+        settings.overrideVoxelSize = true;
+        settings.voxelSize = 0.06f; // самый узкий проход между стульями: 0,68 − 2 × 0,22 = 0,24 м — 4 вокселя
         agentTypeId = settings.agentTypeID;
 
         // Подвижные объекты в NavMesh не попадают: под игроком и оружием не должно быть дыр.
@@ -130,11 +136,80 @@ public class ZombieSpawner : MonoBehaviour
         AgentTypeId = agentTypeId;
         NavMeshReady = true;
         Debug.Log($"ZombieSpawner: NavMesh запечён за {(Time.realtimeSinceStartup - t0):0.00} с ({sources.Count} объектов).");
+        AddPassageLinks();
+    }
+
+    readonly List<NavMeshLinkInstance> links = new List<NavMeshLinkInstance>();
+
+    /// <summary>
+    /// Страховка проходов: где NavMesh по обе стороны двери (или внизу и наверху лестничного пролёта) есть,
+    /// а пути между ними нет или он идёт в обход — добавляем связь (off-mesh link), по которой зомби проходят напрямую.
+    /// Двери на пути зомби открывают сами (SwingGate.OpenNear).
+    /// </summary>
+    void AddPassageLinks()
+    {
+        var filter = new NavMeshQueryFilter { agentTypeID = agentTypeId, areaMask = NavMesh.AllAreas };
+        var p = new NavMeshPath();
+        int added = 0;
+        var report = new List<string>();
+
+        bool Connected(Vector3 a, Vector3 b)
+        {
+            if (!NavMesh.CalculatePath(a, b, filter, p) || p.status != NavMeshPathStatus.PathComplete) return false;
+            float len = 0f;
+            for (int i = 1; i < p.corners.Length; i++) len += Vector3.Distance(p.corners[i - 1], p.corners[i]);
+            return len < Vector3.Distance(a, b) * 2.5f + 1f; // путь есть, но не огромный крюк
+        }
+        void Link(Vector3 a, Vector3 b, string what)
+        {
+            if (!NavMesh.SamplePosition(a, out NavMeshHit ha, 1f, filter) || !NavMesh.SamplePosition(b, out NavMeshHit hb, 1f, filter))
+            {
+                report.Add(what + ": нет NavMesh с одной из сторон");
+                return;
+            }
+            if (Connected(ha.position, hb.position)) return;
+            var inst = NavMesh.AddLink(new NavMeshLinkData
+            {
+                startPosition = ha.position, endPosition = hb.position,
+                width = 0f, costModifier = -1f, bidirectional = true, area = 0, agentTypeID = agentTypeId,
+            });
+            if (!NavMesh.IsLinkValid(inst)) { report.Add(what + ": связь не добавилась"); return; }
+            links.Add(inst);
+            added++;
+            report.Add(what + ": связь добавлена");
+        }
+
+        // Двери и калитки: по точке в 0,9 м перед створкой и за ней (на уровне пола).
+        foreach (var g in SwingGate.All)
+        {
+            if (g == null || g.leaves == null) continue;
+            foreach (var leaf in g.leaves)
+            {
+                if (leaf == null) continue;
+                var rs = leaf.GetComponentsInChildren<Renderer>();
+                if (rs.Length == 0) continue;
+                Bounds b = rs[0].bounds;
+                foreach (var r in rs) b.Encapsulate(r.bounds);
+                if (Mathf.Max(b.size.x, b.size.z) < 0.35f) continue;
+                Vector3 n = b.size.x < b.size.z ? Vector3.right : Vector3.forward; // толщина створки — поперёк прохода
+                Vector3 floor = new Vector3(b.center.x, b.min.y + 0.05f, b.center.z);
+                Link(floor - n * 0.9f, floor + n * 0.9f, "дверь " + leaf.name + " (" + g.name + ")");
+            }
+        }
+
+        // Лестничные пролёты (Entrance*_StairTunnel*): низ пролёта — (0; 0; −0,7), верхняя площадка — (0; 4,4; −6,4).
+        foreach (var t in FindObjectsByType<Transform>())
+            if (t.name.StartsWith("Entrance") && t.name.Contains("StairTunnel"))
+                Link(t.TransformPoint(new Vector3(0f, 0.05f, -0.7f)), t.TransformPoint(new Vector3(0f, 4.45f, -6.4f)), "лестница " + t.name);
+
+        if (report.Count > 0) Debug.Log($"ZombieSpawner: проходы — добавлено связей {added}.\n" + string.Join("\n", report));
     }
 
     void OnDestroy()
     {
         if (navMesh.valid) NavMesh.RemoveNavMeshData(navMesh);
+        foreach (var l in links) if (NavMesh.IsLinkValid(l)) NavMesh.RemoveLink(l);
+        links.Clear();
         if (Instance == this) { Instance = null; AgentTypeId = -1; NavMeshReady = false; }
     }
 

@@ -21,6 +21,11 @@ public class PlayerBodyAnimator : MonoBehaviour
     public float armSwing = 0.16f;
     public float handOutward = 0.035f;
 
+    [Header("Плечи")]
+    [Tooltip("Сдвиг плечевых суставов относительно модели (м): x — внутрь к торсу, y — вверх, z — вперёд. " +
+             "В модели суставы шире торса, ниже линии плеч и смещены к спине — между рукой и туловищем видна пустота.")]
+    public Vector3 shoulderShift = new Vector3(0.06f, 0.04f, 0.06f);
+
     [Header("Ноги")]
     public float legSwingAngle = 26f;
     public float kneeBendAngle = 40f;
@@ -33,6 +38,7 @@ public class PlayerBodyAnimator : MonoBehaviour
         public bool isRight;
         public Transform upper, fore, hand;
         public Quaternion upperRest, foreRest, handRest;
+        public Vector3 upperPosRest, shoulderShiftLocal; // сустав плеча: исходное место и сдвиг к торсу (в осях родителя)
         public float upperLen, foreLen;
         public Transform[][] fingers = new Transform[4][]; // index, middle, ring, pinky
         public Quaternion[][] fingerRest = new Quaternion[4][];
@@ -100,6 +106,12 @@ public class PlayerBodyAnimator : MonoBehaviour
         a.hand = FindBone("Hand." + s);
         if (a.upper == null || a.fore == null || a.hand == null) return null;
         a.upperRest = a.upper.localRotation;
+        a.upperPosRest = a.upper.localPosition;
+        // Сдвиг плеча задан в осях персонажа (внутрь / вверх / вперёд) — переводим в оси родителя кости (Arms_Root),
+        // чтобы при наклоне рук за взглядом сустав оставался на том же месте относительно плеч.
+        float sideSign = isRight ? 1f : -1f;
+        Vector3 shiftWorld = transform.right * (-sideSign * shoulderShift.x) + transform.up * shoulderShift.y + transform.forward * shoulderShift.z;
+        a.shoulderShiftLocal = a.upper.parent != null ? a.upper.parent.InverseTransformVector(shiftWorld) : shiftWorld;
         a.foreRest = a.fore.localRotation;
         a.handRest = a.hand.localRotation;
         a.upperLen = Vector3.Distance(a.upper.position, a.fore.position);
@@ -186,6 +198,7 @@ public class PlayerBodyAnimator : MonoBehaviour
 
     static void ResetArm(Arm a)
     {
+        a.upper.localPosition = a.upperPosRest + a.shoulderShiftLocal; // плечо прижато к торсу
         a.upper.localRotation = a.upperRest;
         a.fore.localRotation = a.foreRest;
         a.hand.localRotation = a.handRest;

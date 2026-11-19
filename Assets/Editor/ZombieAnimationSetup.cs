@@ -27,7 +27,7 @@ public static class ZombieAnimationSetup
     const float TargetHeight = 1.8f;
 
     // Увеличивается, когда настройка меняется — тогда она выполняется заново.
-    const int SetupVersion = 11;
+    const int SetupVersion = 12; // 12 — клип танца (Animations/Dance)
     static string VersionKey => "ZombieAnimationSetup.Version." + Application.dataPath;
 
     // Состояния контроллера — их имена использует Zombie.cs.
@@ -35,6 +35,7 @@ public static class ZombieAnimationSetup
     public static readonly string[] Attacks = { "Attack1", "Attack2" };
     public static readonly string[] Hits = { "Hit1", "Hit2" };
     public static readonly string[] Deaths = { "Death1", "Death2" };
+    public const string Dance = "Dance";
 
     static ZombieAnimationSetup()
     {
@@ -248,19 +249,21 @@ public static class ZombieAnimationSetup
         string file = Path.GetFileNameWithoutExtension(path);
         bool loop = folder == "Idle" || folder == "Walk";
         bool isTurn = file.Contains("Turn");
+        bool isDance = folder == "Dance";
 
         importer.animationType = ModelImporterAnimationType.Human;
         importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
         importer.importAnimation = true;
         importer.materialImportMode = ModelImporterMaterialImportMode.None;
+        if (isDance && !DanceAvatar(path, importer)) return null;
         var src = importer.clipAnimations.Length > 0 ? importer.clipAnimations : importer.defaultClipAnimations;
         var clips = src.Select(c =>
         {
             c.name = file;
             c.loopTime = loop && !isTurn;
             c.loopPose = false;
-            // Высота — как в клипе (Mixamo: ступни на полу).
-            c.lockRootHeightY = true; c.keepOriginalPositionY = true; c.heightFromFeet = false;
+            // Высота — как в клипе (Mixamo: ступни на полу). Танец снят с другого роста — по ступням, чтобы не висел и не проваливался.
+            c.lockRootHeightY = true; c.keepOriginalPositionY = !isDance; c.heightFromFeet = isDance;
             // Ходьба на месте: смещение уходит в root motion, а его зомби не применяет — двигает NavMeshAgent.
             // У остальных клипов смещение корпуса остаётся в позе (падение, выпад при укусе).
             c.lockRootPositionXZ = folder != "Walk"; c.keepOriginalPositionXZ = true;
@@ -276,6 +279,93 @@ public static class ZombieAnimationSetup
             Debug.Log($"ZombieAnimationSetup: клип {folder}/{clip.name}: {clip.length:0.00} с, скорость {clip.averageSpeed.magnitude:0.00} м/с " +
                       $"(fwd {clip.averageSpeed.z:0.00}), угл. скорость {clip.averageAngularSpeed:0.000}, humanMotion {clip.humanMotion}, loop {clip.isLooping}");
         return clip;
+    }
+
+    // Клип танца из DeepMotion Animate 3D (снят по видео): скелет манекена с костями *_JNT. Автосопоставление Unity
+    // на этих именах ненадёжно, поэтому кости Humanoid задаются явно.
+    static readonly (string human, string bone)[] DanceBody =
+    {
+        ("Hips", "hips_JNT"), ("Spine", "spine_JNT"), ("Chest", "spine1_JNT"), ("UpperChest", "spine2_JNT"),
+        ("Neck", "neck_JNT"), ("Head", "head_JNT"),
+    };
+    static readonly (string human, string bone)[] DanceSide =
+    {
+        ("Shoulder", "shoulder"), ("UpperArm", "arm"), ("LowerArm", "forearm"), ("Hand", "hand"),
+        ("UpperLeg", "upleg"), ("LowerLeg", "leg"), ("Foot", "foot"), ("Toes", "toebase"),
+    };
+    static readonly (string human, string bone)[] DanceFingers =
+    {
+        ("Thumb", "handThumb"), ("Index", "handIndex"), ("Middle", "handMiddle"), ("Ring", "handRing"), ("Little", "handPinky"),
+    };
+
+    /// <summary>Аватар для клипа танца: явное сопоставление костей и скелет в T-позе (руки — горизонтально в стороны).</summary>
+    static bool DanceAvatar(string path, ModelImporter importer)
+    {
+        var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+        if (asset == null) return false;
+        var go = Object.Instantiate(asset);
+        go.hideFlags = HideFlags.HideAndDontSave;
+        try
+        {
+            var all = go.GetComponentsInChildren<Transform>(true);
+            Transform Find(string n) => all.FirstOrDefault(t => t.name == n);
+            var human = new List<HumanBone>();
+            void Map(string h, string b)
+            {
+                if (Find(b) != null) human.Add(new HumanBone { humanName = h, boneName = b, limit = new HumanLimit { useDefaultValues = true } });
+            }
+            foreach (var (h, b) in DanceBody) Map(h, b);
+            string[] parts = { "Proximal", "Intermediate", "Distal" };
+            foreach (var (side, p) in new[] { ("Left", "l_"), ("Right", "r_") })
+            {
+                foreach (var (h, b) in DanceSide) Map(side + h, p + b + "_JNT");
+                foreach (var (h, b) in DanceFingers)
+                    for (int i = 0; i < 3; i++) Map(side + " " + h + " " + parts[i], p + b + (i + 1) + "_JNT");
+            }
+            if (human.Count < 15)
+            {
+                Debug.LogError($"ZombieAnimationSetup: {Path.GetFileName(path)} — не найдены кости DeepMotion (*_JNT), нашлось {human.Count}. Танец пропущен.");
+                return false;
+            }
+
+            // T-поза: руки от плеча до кисти — горизонтально наружу (если манекен уже в T-позе, ничего не меняется).
+            Transform hips = Find("hips_JNT");
+            void Aim(Transform bone, Transform child, Vector3 dir)
+            {
+                if (bone == null || child == null) return;
+                Vector3 cur = child.position - bone.position;
+                if (cur.sqrMagnitude > 1e-8f) bone.rotation = Quaternion.FromToRotation(cur, dir) * bone.rotation;
+            }
+            foreach (var p in new[] { "l_", "r_" })
+            {
+                Transform up = Find(p + "arm_JNT"), lo = Find(p + "forearm_JNT"), hand = Find(p + "hand_JNT"), mid = Find(p + "handMiddle1_JNT");
+                if (up == null || hips == null) continue;
+                Vector3 r = go.transform.right;
+                Vector3 outward = Mathf.Sign(Vector3.Dot(up.position - hips.position, r)) * r;
+                Aim(up, lo, outward);
+                Aim(lo, hand, outward);
+                Aim(hand, mid, outward);
+            }
+
+            var desc = importer.humanDescription;
+            desc.human = human.ToArray();
+            desc.skeleton = all.Select(t => new SkeletonBone
+            {
+                name = t == go.transform ? asset.name : t.name,
+                position = t.localPosition, rotation = t.localRotation, scale = t.localScale,
+            }).ToArray();
+            desc.upperArmTwist = 0.5f; desc.lowerArmTwist = 0.5f;
+            desc.upperLegTwist = 0.5f; desc.lowerLegTwist = 0.5f;
+            desc.armStretch = 0.05f; desc.legStretch = 0.05f;
+            desc.feetSpacing = 0f;
+            desc.hasTranslationDoF = false;
+            importer.humanDescription = desc;
+            importer.importCameras = false;
+            importer.importLights = false;
+            Debug.Log($"ZombieAnimationSetup: танец {Path.GetFileName(path)} — костей Humanoid {human.Count}");
+            return true;
+        }
+        finally { Object.DestroyImmediate(go); }
     }
 
     // ---------- Контроллер ----------
@@ -392,6 +482,8 @@ public static class ZombieAnimationSetup
         if (turn != null) { State(sm, Turn, turn); State(sm, TurnMirror, turn, true); }
         for (int i = 0; i < Attacks.Length; i++) State(sm, Attacks[i], attacks[i] ?? attacks.FirstOrDefault(a => a != null));
         for (int i = 0; i < Deaths.Length; i++) State(sm, Deaths[i], deaths[i] ?? deaths.FirstOrDefault(a => a != null));
+        var dance = Pick(clips, "Dance");
+        if (dance != null) State(sm, Dance, dance); // пасхалка: танец по секретной кнопке (Zombie.cs, ZombieDance)
 
         // Слой реакций на попадания — только верх тела, ноги продолжают идти.
         ac.AddLayer("Hit");

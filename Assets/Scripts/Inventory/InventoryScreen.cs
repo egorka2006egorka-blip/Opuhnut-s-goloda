@@ -245,6 +245,12 @@ public class InventoryScreen : MonoBehaviour
         desc.normal.textColor = new Color(MenuUI.TextColor.r, MenuUI.TextColor.g, MenuUI.TextColor.b, 0.8f);
         float buttonH = MenuUI.S(58);
         string text = sd.description;
+        if (System.Array.IndexOf(ItemDatabase.Cards, selected) >= 0)
+        {
+            int got = 0;
+            foreach (var c in ItemDatabase.Cards) if (inventory.Count(c) > 0) got++;
+            text += " Собрано: " + got + " из " + ItemDatabase.Cards.Length + ".";
+        }
         if (weapon != null)
         {
             bool inHands = weapons != null && weapons.CurrentWeapon == weapon;

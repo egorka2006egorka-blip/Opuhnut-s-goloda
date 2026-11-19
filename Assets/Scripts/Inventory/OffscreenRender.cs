@@ -95,7 +95,10 @@ public class ItemPreviewStage
         Ensure();
         var m = Model(id);
         m.SetActive(true);
-        m.transform.localRotation = Quaternion.identity;
+        // Карточка лежит лицом вверх и ловит верхний свет в лоб — пересвечивается и видна сплющенной.
+        // Для снимка ставим её лицом к камере (камера смотрит сверху под 28°): основной свет падает вскользь.
+        bool card = System.Array.IndexOf(ItemDatabase.Cards, id) >= 0;
+        m.transform.localRotation = card ? Quaternion.Euler(-62f, 0f, 0f) : Quaternion.identity;
         m.transform.localPosition = Vector3.zero;
         // Центруем модель в начале координат сцены-студии.
         var rs = m.GetComponentsInChildren<Renderer>();
@@ -127,7 +130,7 @@ public class ItemPreviewStage
         {
             if (Icon(s.id) != null) continue;
             var rt = OffscreenRender.NewRT(192, 192);
-            Shoot(s.id, rt, -35f);
+            Shoot(s.id, rt, System.Array.IndexOf(ItemDatabase.Cards, s.id) >= 0 ? -8f : -35f); // карточку — почти анфас
             icons[s.id] = rt;
         }
     }

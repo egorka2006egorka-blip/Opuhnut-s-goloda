@@ -363,6 +363,18 @@ public static class MenuUI
 
         if (SelectorRow(RowRect(inner, 3), "Вертикальная синхронизация", GameSettings.VSync ? "Вкл" : "Выкл") != 0)
             GameSettings.SetVSync(!GameSettings.VSync);
+
+        var filters = GameSettings.Filters;
+        int fi = System.Array.IndexOf(filters, GameSettings.Filter);
+        d = SelectorRow(RowRect(inner, 4), "Фильтр", GameSettings.FilterName(filters[fi]));
+        if (d != 0) GameSettings.SetFilter(filters[(fi + d + filters.Length) % filters.Length]);
+
+        // Сила фильтра — только когда фильтр выбран.
+        if (GameSettings.Filter != ScreenFilterKind.None)
+        {
+            float fv = SliderRow(RowRect(inner, 5), "Сила фильтра", GameSettings.FilterIntensity, 0f, 1f, Percent(GameSettings.FilterIntensity));
+            if (!Mathf.Approximately(fv, GameSettings.FilterIntensity)) GameSettings.SetFilterIntensity(fv);
+        }
     }
 
     static void SoundTab(Rect inner)

@@ -3,7 +3,7 @@ using UnityEngine;
 
 /// <summary>
 /// Настройки игры: громкость (общая, эффекты, музыка, голоса), чувствительность мыши,
-/// разрешение, режим экрана, качество графики, вертикальная синхронизация.
+/// разрешение, режим экрана, качество графики, вертикальная синхронизация, экранный фильтр.
 /// Хранятся в PlayerPrefs и применяются при запуске. Клавиши — в Controls.
 /// </summary>
 public static class GameSettings
@@ -17,6 +17,7 @@ public static class GameSettings
     const string VSyncKey = "Settings.VSync";
     const string ResWKey = "Settings.ResolutionWidth", ResHKey = "Settings.ResolutionHeight";
     const string ModeKey = "Settings.ScreenMode";
+    const string FilterKey = "Settings.Filter", FilterIntensityKey = "Settings.FilterIntensity";
 
     public const float MinSensitivity = 0.2f, MaxSensitivity = 3f;
 
@@ -32,6 +33,9 @@ public static class GameSettings
     public static bool VSync { get; private set; } = true;
     public static Vector2Int Resolution { get; private set; }
     public static FullScreenMode ScreenMode { get; private set; }
+    public static ScreenFilterKind Filter { get; private set; } = ScreenFilterKind.None;
+    /// <summary>Сила фильтра 0..1.</summary>
+    public static float FilterIntensity { get; private set; } = 1f;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     static void Load()
@@ -50,6 +54,10 @@ public static class GameSettings
                 QualitySettings.SetQualityLevel(q, true);
         }
         QualitySettings.vSyncCount = VSync ? 1 : 0;
+
+        int f = PlayerPrefs.GetInt(FilterKey, 0);
+        Filter = System.Enum.IsDefined(typeof(ScreenFilterKind), f) ? (ScreenFilterKind)f : ScreenFilterKind.None;
+        FilterIntensity = Mathf.Clamp01(PlayerPrefs.GetFloat(FilterIntensityKey, 1f));
 
         Resolution = new Vector2Int(PlayerPrefs.GetInt(ResWKey, Screen.width), PlayerPrefs.GetInt(ResHKey, Screen.height));
         ScreenMode = (FullScreenMode)PlayerPrefs.GetInt(ModeKey, (int)Screen.fullScreenMode);
@@ -193,6 +201,32 @@ public static class GameSettings
         ScreenMode = m;
         PlayerPrefs.SetInt(ModeKey, (int)m);
         Screen.SetResolution(Resolution.x, Resolution.y, m);
+    }
+
+    public static readonly ScreenFilterKind[] Filters = (ScreenFilterKind[])System.Enum.GetValues(typeof(ScreenFilterKind));
+
+    public static void SetFilter(ScreenFilterKind kind)
+    {
+        Filter = kind;
+        PlayerPrefs.SetInt(FilterKey, (int)kind);
+    }
+
+    public static void SetFilterIntensity(float v)
+    {
+        FilterIntensity = Mathf.Clamp01(v);
+        PlayerPrefs.SetFloat(FilterIntensityKey, FilterIntensity);
+    }
+
+    public static string FilterName(ScreenFilterKind kind)
+    {
+        switch (kind)
+        {
+            case ScreenFilterKind.VHS: return "VHS-кассета";
+            case ScreenFilterKind.CRT: return "ЭЛТ-монитор";
+            case ScreenFilterKind.Noir: return "Нуар";
+            case ScreenFilterKind.Retro: return "Ретро-консоль";
+            default: return "Нет";
+        }
     }
 
     /// <summary>Название уровня качества по-русски (для стандартных имён Unity/URP).</summary>
