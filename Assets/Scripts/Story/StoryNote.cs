@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Записка в ящике в подвале.</summary>
+/// <summary>Записка в подвале: E — прочитать (реплика lineId из lines.json).</summary>
 public class StoryNote : Interactable
 {
+    [Tooltip("Реплика из lines.json, которая звучит при чтении.")]
+    public string lineId = "note";
     bool read;
     public override string Prompt => read ? "Перечитать записку" : "Прочитать записку";
 
@@ -19,6 +21,6 @@ public class StoryNote : Interactable
     public override void Interact(GameObject player)
     {
         read = true;
-        if (DialogueSystem.CurrentId != "note") DialogueSystem.Play("note");
+        if (DialogueSystem.CurrentId != lineId) DialogueSystem.Play(lineId);
     }
 }

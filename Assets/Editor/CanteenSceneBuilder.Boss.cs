@@ -132,6 +132,9 @@ public static partial class CanteenSceneBuilder
             else { l.color = new Color(1f, 0.78f, 0.52f); l.range = 7.5f; l.intensity = 0.8f; f.flicker = 0.15f; }
         }
 
+        SetupCodeLockedDoor(basement.transform, opening + shift, floorY);
+        FurnishBoilerRoom(canteen, basement.transform, floorY);
+
         Bounds fb = RendererBounds(floorT, new Bounds());
         info.arena = new Bounds(new Vector3(fb.center.x, floorY + 1.6f, fb.center.z), new Vector3(fb.size.x, 3.6f, fb.size.z));
         // Босс — в глубине главного зала, напротив входа, лицом к двери.
@@ -163,6 +166,128 @@ public static partial class CanteenSceneBuilder
                 if (!Physics.CheckCapsule(c + Vector3.up * 0.8f, c + Vector3.up * 2.2f, 0.6f, ~0, QueryTriggerInteraction.Ignore)) return c;
             }
         return p;
+    }
+
+    /// <summary>
+    /// Дверь в котельную подвала (Door_RoomA): в модели приоткрыта на 55° — ставим закрытой (поворот — к ближайшим 90°)
+    /// и вешаем кодовый замок (CodeLock, код 2402) на стену у свободного края двери, со стороны зала.
+    /// </summary>
+    static void SetupCodeLockedDoor(Transform basement, Vector3 hall, float floorY)
+    {
+        var door = FindChild(basement, "Door_RoomA");
+        var mf = door != null ? door.GetComponent<MeshFilter>() : null;
+        if (mf == null || mf.sharedMesh == null) { Debug.LogWarning("CanteenSceneBuilder: в подвале нет двери Door_RoomA — кодового замка не будет."); return; }
+        Vector3 e = door.localEulerAngles;
+        door.localRotation = Quaternion.Euler(e.x, Mathf.Round(e.y / 90f) * 90f, e.z);
+        SetupDoor(door);
+        var gate = door.GetComponent<SwingGate>();
+        if (gate == null) return;
+
+        // Полотно (без ручки): ширина и толщина по вершинам первого подмеша.
+        var mesh = mf.sharedMesh;
+        var v = mesh.vertices;
+        Bounds slab = new Bounds(v[mesh.GetTriangles(0)[0]], Vector3.zero);
+        foreach (int i in mesh.GetTriangles(0)) slab.Encapsulate(v[i]);
+        Vector3 hinge = door.parent.TransformPoint(gate.hinges[0]);
+        Vector3 center = door.TransformPoint(slab.center);
+        Vector3 along = center - hinge; along.y = 0f; along.Normalize();
+        Vector3 normal = door.forward; normal.y = 0f; normal.Normalize();
+        Vector3 side = Vector3.Dot(hall - center, normal) >= 0f ? normal : -normal; // к залу
+        Vector3 faceA = door.TransformPoint(new Vector3(slab.center.x, slab.center.y, slab.min.z));
+        Vector3 faceB = door.TransformPoint(new Vector3(slab.center.x, slab.center.y, slab.max.z));
+        Vector3 face = Vector3.Dot(faceA - faceB, side) > 0f ? faceA : faceB;
+        float width = Vector3.Distance(Vector3.ProjectOnPlane(door.TransformPoint(new Vector3(slab.min.x, 0f, 0f)), Vector3.up),
+                                       Vector3.ProjectOnPlane(door.TransformPoint(new Vector3(slab.max.x, 0f, 0f)), Vector3.up));
+
+        // Проушина — на стене в 6 см за свободным краем двери, на высоте 1,3 м.
+        Vector3 pos = hinge + along * (width + 0.06f);
+        pos += side * Vector3.Dot(face - pos, side);
+        pos.y = floorY + 1.3f;
+        var go = new GameObject("CodeLock_" + door.name);
+        go.transform.SetParent(basement, true);
+        go.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(side, Vector3.up));
+        var lk = go.AddComponent<CodeLock>();
+        lk.code = "2402";
+        lk.gate = gate;
+        lk.doorDir = Vector3.Dot(-along, go.transform.right) >= 0f ? 1f : -1f;
+    }
+
+    /// <summary>
+    /// Стол и стул в котельной (за дверью с кодовым замком) — копии столовских Table_001 и Chair_001.
+    /// Стоят в дальнем конце комнаты, у стены напротив двери, между баком с водой и бочками: стул — у стены,
+    /// сидящий за столом смотрит на вход.
+    /// Места заданы в координатах модели подвала (.glb, метры по X и Z); в сцену они переводятся по трём опорным
+    /// объектам котельной — так не важно, как модель повёрнута и отражена при импорте.
+    /// </summary>
+    static void FurnishBoilerRoom(Transform canteen, Transform basement, float floorY)
+    {
+        // Центры опорных объектов в модели подвала (X, Z).
+        var anchors = new (string name, Vector2 model)[]
+        {
+            ("Boiler_01", new Vector2(13.2025f, -23.301f)),
+            ("WaterTank_01", new Vector2(17.4f, -24.256f)),
+            ("ElectricalPanel_01", new Vector2(11.3f, -20.343f)),
+        };
+        var world = new Vector2[3];
+        for (int i = 0; i < 3; i++)
+        {
+            var t = FindChild(basement, anchors[i].name);
+            if (t == null) { Debug.LogWarning("CanteenSceneBuilder: в подвале нет " + anchors[i].name + " — стола и стула в котельной не будет."); return; }
+            Vector3 c = RendererBounds(t, new Bounds(t.position, Vector3.zero)).center;
+            world[i] = new Vector2(c.x, c.z);
+        }
+        // Аффинное отображение модель → сцена по трём точкам: w = M·(m − m0) + w0.
+        Vector2 m1 = anchors[1].model - anchors[0].model, m2 = anchors[2].model - anchors[0].model;
+        Vector2 w1 = world[1] - world[0], w2 = world[2] - world[0];
+        float det = m1.x * m2.y - m2.x * m1.y;
+        Vector2 col0 = (w1 * m2.y - w2 * m1.y) / det;  // M·(1, 0)
+        Vector2 col1 = (w2 * m1.x - w1 * m2.x) / det;  // M·(0, 1)
+        Vector3 ToWorld(Vector2 m)
+        {
+            Vector2 d = m - anchors[0].model;
+            Vector2 w = world[0] + col0 * d.x + col1 * d.y;
+            return new Vector3(w.x, floorY, w.y);
+        }
+        Vector3 Dir(Vector2 m) { var w = col0 * m.x + col1 * m.y; return new Vector3(w.x, 0f, w.y).normalized; }
+
+        var table = canteen != null ? FindChild(canteen, "Table_001") : null;
+        var chair = canteen != null ? FindChild(canteen, "Chair_001") : null;
+        if (table == null || chair == null) { Debug.LogWarning("CanteenSceneBuilder: в столовой нет Table_001 / Chair_001 — стола и стула в котельной не будет."); return; }
+
+        // Стул в столовой смотрит на свой стол: направление — от стула к столу, по ближайшей оси.
+        Vector3 tc = RendererBounds(table, new Bounds(table.position, Vector3.zero)).center;
+        Vector3 cc = RendererBounds(chair, new Bounds(chair.position, Vector3.zero)).center;
+        Vector3 chairFacing = SnapAxis(tc - cc);
+        Bounds tb = RendererBounds(table, new Bounds(table.position, Vector3.zero));
+        Vector3 tableLong = tb.size.x >= tb.size.z ? Vector3.right : Vector3.forward;
+
+        // В модели дверь — в западной стене (X = 10, Z ≈ −22,43), дальняя стена — восточная (X ≈ 18,25).
+        // Стол — напротив двери, длинной стороной поперёк комнаты (вдоль оси Z модели); за ним — стул (между спинкой
+        // и стеной ~0,5 м), развёрнутый к двери (на −X модели). На этот стол аптечки и патроны не кладутся (LevelPropsSetup).
+        Vector3 across = Dir(Vector2.up), toDoor = Dir(Vector2.left);
+        PlaceCopy(table, "BoilerRoom_Table", basement, ToWorld(new Vector2(16.6f, -22.4f)), tableLong, across, floorY);
+        PlaceCopy(chair, "BoilerRoom_Chair", basement, ToWorld(new Vector2(17.26f, -22.4f)), chairFacing, toDoor, floorY);
+    }
+
+    static Vector3 SnapAxis(Vector3 v) =>
+        Mathf.Abs(v.x) >= Mathf.Abs(v.z) ? new Vector3(Mathf.Sign(v.x), 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(v.z));
+
+    /// <summary>Копия объекта: направление from поворачивается в to (вокруг вертикали), центр — в target, низ — на пол.</summary>
+    static void PlaceCopy(Transform source, string name, Transform parent, Vector3 target, Vector3 from, Vector3 to, float floorY)
+    {
+        var copy = Object.Instantiate(source.gameObject, source.parent).transform;
+        copy.name = name;
+        copy.SetParent(parent, true);
+        Bounds b = RendererBounds(copy, new Bounds(copy.position, Vector3.zero));
+        copy.RotateAround(b.center, Vector3.up, Vector3.SignedAngle(from, to, Vector3.up));
+        b = RendererBounds(copy, new Bounds(copy.position, Vector3.zero));
+        copy.position += new Vector3(target.x - b.center.x, floorY - b.min.y, target.z - b.center.z);
+        if (copy.GetComponent<Collider>() == null)
+        {
+            var mf = copy.GetComponent<MeshFilter>();
+            if (mf != null && mf.sharedMesh != null) copy.gameObject.AddComponent<MeshCollider>().sharedMesh = mf.sharedMesh;
+        }
+        GameObjectUtility.SetStaticEditorFlags(copy.gameObject, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
     }
 
     // ---------------------------------------------------------------- Босс

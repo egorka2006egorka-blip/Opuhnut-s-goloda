@@ -146,6 +146,8 @@ public static class LevelPropsSetup
             var h = hits[i];
             float height = h.point.y - hits[i + 1].point.y;
             if (height < 0.55f || height > 1.15f || h.normal.y < 0.97f || h.rigidbody != null) continue;
+            if (h.collider.name.StartsWith("BoilerRoom_")) continue; // стол в котельной — пустой, по сюжету
+            if (Physics.OverlapSphere(h.point, 0.35f, ~0, QueryTriggerInteraction.Ignore).Any(c => c.GetComponentInParent<StoryNote>() != null)) continue; // рядом записка
             if (i > 0 && hits[i - 1].point.y - h.point.y < 0.6f) continue; // сверху мало места (полка, витрина)
             if (!Flat(h.point)) continue;
             if (Physics.CheckSphere(h.point + Vector3.up * 0.2f, 0.13f, ~0, QueryTriggerInteraction.Ignore)) continue; // что-то стоит

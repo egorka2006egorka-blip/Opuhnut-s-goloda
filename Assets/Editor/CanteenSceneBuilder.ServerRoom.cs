@@ -84,6 +84,11 @@ public static partial class CanteenSceneBuilder
         // Двери: задняя дверь подвала (откроется, когда оторвут доски), вход в серверную, пультовая, комната ИБП.
         // Door_Exit серверной ведёт наружу модели — она остаётся закрытой.
         SetupModelDoor(door);
+        // В модели дверь пультовой приоткрыта (повёрнута на 115° вместо 90°) — между ней и коробкой щель.
+        // Закрываем её: закрытая створка повёрнута так же, как коробка (петля — в pivot створки, в коробке).
+        var crDoor = FindChild(room.transform, "Door_ControlRoom");
+        var crFrame = FindChild(room.transform, "DoorFrame_ControlRoom");
+        if (crDoor != null && crFrame != null && crDoor.parent == crFrame.parent) crDoor.localRotation = crFrame.localRotation;
         foreach (var name in new[] { "Door_Entry", "Door_ControlRoom", "Door_UPS" })
             SetupModelDoor(FindChild(room.transform, name));
 

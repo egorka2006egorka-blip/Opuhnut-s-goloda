@@ -52,6 +52,30 @@ public static partial class CanteenSceneBuilder
             PlaceNote(basement.root, doorFront, server.back);
         }
         else Debug.LogWarning("CanteenSceneBuilder: серверной нет — Шапика и заколоченной двери не будет, сюжет остановится после лома.");
+        if (basement.ok) PlaceExtraNotes(basement.root);
+    }
+
+    /// <summary>
+    /// Ещё две записки в зале подвала (не в котельной): на ящике в западном углу и на ящике посреди зала.
+    /// Ящик ищется по имени в модели; если сверху на нём что-то стоит — записка ложится на это (луч сверху вниз).
+    /// </summary>
+    static void PlaceExtraNotes(Transform basement)
+    {
+        Physics.SyncTransforms();
+        foreach (var (crateName, lineId, yaw) in new[] { ("WoodenCrate_09", "note_2", -24f), ("WoodenCrate_07", "note_3", 38f) })
+        {
+            var crate = FindChild(basement, crateName);
+            if (crate == null) { Debug.LogWarning("CanteenSceneBuilder: в подвале нет " + crateName + " — записки " + lineId + " не будет."); continue; }
+            Bounds cb = RendererBounds(crate, new Bounds(crate.position, Vector3.zero));
+            Vector3 pos = new Vector3(cb.center.x, cb.max.y, cb.center.z);
+            float surface = float.NegativeInfinity;
+            foreach (var hit in Physics.RaycastAll(pos + Vector3.up * 0.4f, Vector3.down, 3f, ~0, QueryTriggerInteraction.Ignore))
+                if (hit.point.y <= pos.y + 0.01f) surface = Mathf.Max(surface, hit.point.y);
+            if (!float.IsNegativeInfinity(surface)) pos.y = surface;
+            var note = new GameObject("Note_" + lineId);
+            note.transform.SetPositionAndRotation(pos + Vector3.up * 0.002f, Quaternion.Euler(0f, yaw, 0f));
+            note.AddComponent<StoryNote>().lineId = lineId;
+        }
     }
 
     /// <summary>
@@ -320,6 +344,13 @@ public static partial class CanteenSceneBuilder
             notePos = new Vector3(cb.center.x, cb.max.y + 0.003f, cb.center.z);
         }
         else notePos = doorFront + Vector3.Cross(Vector3.up, back) * 0.8f;
+        // Кладём на то, что под запиской на самом деле: у открытой коробки верх габарита — края клапанов,
+        // а крышки нет, и записка висела в воздухе. Луч сверху вниз находит содержимое коробки, дно или пол.
+        // Над коробкой могут идти трубы — берём самое высокое попадание не выше прежней точки.
+        float surface = float.NegativeInfinity;
+        foreach (var hit in Physics.RaycastAll(notePos + Vector3.up * 0.4f, Vector3.down, 3f, ~0, QueryTriggerInteraction.Ignore))
+            if (hit.point.y <= notePos.y + 0.01f) surface = Mathf.Max(surface, hit.point.y);
+        if (!float.IsNegativeInfinity(surface)) notePos.y = surface + 0.002f;
         var note = new GameObject("Note");
         note.transform.position = notePos;
         note.AddComponent<StoryNote>();

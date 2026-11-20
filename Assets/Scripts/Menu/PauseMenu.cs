@@ -84,6 +84,7 @@ public class PauseMenu : MonoBehaviour
         {
             if (!IsPaused && InventoryScreen.IsOpen) InventoryScreen.Close(); // Esc сначала закрывает инвентарь
             else if (!IsPaused && Shopkeeper.IsShopOpen) Shopkeeper.CloseShop(); // …и окно магазина
+            else if (!IsPaused && CodeLock.Active != null) CodeLock.CloseActive(); // …и набор кода на замке
             else if (!IsPaused) StartCoroutine(CaptureThen(() => { page = Page.Main; SetPaused(true); }));
             else if (slots.HandleEscape()) { }
             else if (page != Page.Main) { GameSettings.Save(); page = Page.Main; }

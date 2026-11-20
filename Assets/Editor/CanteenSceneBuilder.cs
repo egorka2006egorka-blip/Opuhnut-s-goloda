@@ -30,7 +30,7 @@ public static partial class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 41;
+    const int BuildVersion = 48;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
     /// <summary>Сцена есть и собрана текущей версией сборщика.</summary>
     public static bool SceneUpToDate => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 1) >= BuildVersion;
@@ -45,7 +45,7 @@ public static partial class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || SceneUpToDate) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился: в серверной — аварийная блокировка. Шапик заперт в пультовой, лезут зомби; чтобы его освободить, нужно пройти три мини-игры (рубильники, заражённые серверы, взлом терминала). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился: дверь пультовой серверной закрыта полностью, дверь в котельную подвала заперта на кодовый замок, записка в подвале больше не висит в воздухе, в котельной появились стол и стул. Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();

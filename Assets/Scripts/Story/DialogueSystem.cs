@@ -17,6 +17,10 @@ public static class StoryLines
 
     static Dictionary<string, DialogueLine> map;
 
+    // Перезагрузка домена при входе в Play Mode выключена — без сброса субтитры брались бы из старой версии lines.json.
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() => map = null;
+
     public static DialogueLine Get(string id)
     {
         if (map == null)
