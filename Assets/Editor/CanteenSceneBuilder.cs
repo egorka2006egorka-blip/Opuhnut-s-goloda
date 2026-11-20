@@ -30,7 +30,7 @@ public static partial class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 48;
+    const int BuildVersion = 52;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
     /// <summary>Сцена есть и собрана текущей версией сборщика.</summary>
     public static bool SceneUpToDate => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 1) >= BuildVersion;
@@ -45,7 +45,7 @@ public static partial class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || SceneUpToDate) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился: дверь пультовой серверной закрыта полностью, дверь в котельную подвала заперта на кодовый замок, записка в подвале больше не висит в воздухе, в котельной появились стол и стул. Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился: у столовой убрана лестница вверх — осталась только дверь с коробкой, проём вокруг неё заделан стеной; на недоступных дверях — подсказка «Закрыто». Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -99,6 +99,11 @@ public static partial class CanteenSceneBuilder
             // В проёме остаётся одна дверь — со стороны столовой.
             FindChild(kitchen.transform, "Door_ToCanteen")?.gameObject.SetActive(false);
         }
+        // Лестница вверх из столовой не нужна — от неё остаётся только нижняя дверь с коробкой (обрамление и петли).
+        // Прячем после того, как с неё сняты копии (лестницы кухни, подвала и серверной).
+        if (stairsUp != null)
+            foreach (Transform part in stairsUp)
+                if (part.name != "Door_Bottom" && part.name != "DoorFrame_Bottom") part.gameObject.SetActive(false);
         SetupDoor(FindChild(canteen.transform, "Door_001"));
 
         // Калитка между линиями раздачи у входа: створки открываются на E, поэтому не статичны.
@@ -113,6 +118,7 @@ public static partial class CanteenSceneBuilder
 
         Bounds floor = RendererBounds(FindChild(canteen.transform, "Floor"), new Bounds(Vector3.zero, new Vector3(30, 0, 20)));
         float floorY = floor.max.y;
+        if (stairsUp != null) FillStairsUpOpening(canteen.transform, stairsUp, floor);
 
         // Точка появления: у главного входа (Door_Near), лицом в зал.
         Vector3 spawn, forward;
@@ -243,6 +249,8 @@ public static partial class CanteenSceneBuilder
 
         // ---------- Зомби ----------
         CreateZombieSpawner(floor);
+
+        MarkClosedDoors(scene);
 
         Selection.activeGameObject = player;
         Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
@@ -1100,6 +1108,71 @@ public static partial class CanteenSceneBuilder
             l.color = new Color(0.97f, 0.98f, 1f);
             l.shadows = LightShadows.None;
         }
+    }
+
+    /// <summary>
+    /// Проём под убранную лестницу вверх (1,6 × 2,6 м в стене толщиной 0,3 м) шире двери с коробкой (0,9 × 2,1 м):
+    /// раньше края закрывал тоннель. Заделываем зазоры по бокам и над коробкой вставками из материала стен —
+    /// на верхней висит табличка «Выход» (Exit_002).
+    /// </summary>
+    static void FillStairsUpOpening(Transform canteen, Transform stairsUp, Bounds floor)
+    {
+        const float openingWidth = 1.6f, openingHeight = 2.6f, wallThickness = 0.3f, overlap = 0.01f;
+        var frame = FindChild(stairsUp, "DoorFrame_Bottom");
+        if (frame == null) { Debug.LogWarning("CanteenSceneBuilder: нет коробки DoorFrame_Bottom — проём у бывшей лестницы вверх не заделан."); return; }
+        Bounds fb = RendererBounds(frame, new Bounds(frame.position, Vector3.zero));
+
+        // Ширина двери — по длинной горизонтальной стороне коробки; нормаль стены — смотрит в зал.
+        bool alongZ = fb.size.z > fb.size.x;
+        Vector3 along = alongZ ? Vector3.forward : Vector3.right;
+        Vector3 inward = alongZ ? Vector3.right : Vector3.forward;
+        if (Vector3.Dot(floor.center - fb.center, inward) < 0f) inward = -inward;
+        float frameWidth = alongZ ? fb.size.z : fb.size.x;
+        float frameDepth = alongZ ? fb.size.x : fb.size.z;
+        Vector3 face = fb.center + inward * (frameDepth * 0.5f);       // плоскость стены со стороны зала
+        Vector3 mid = face - inward * (wallThickness * 0.5f);
+        mid.y = fb.min.y;
+
+        Material wallMat = null;
+        var wallR = FindChild(canteen, "Walls")?.GetComponent<Renderer>();
+        if (wallR != null)
+            wallMat = wallR.sharedMaterials.FirstOrDefault(m => m != null && m.name.StartsWith("Wall_")) ?? wallR.sharedMaterial;
+
+        float side = (openingWidth - frameWidth) * 0.5f;
+        float top = openingHeight - fb.size.y;
+        void Patch(string name, float offset, float width, float y0, float height)
+        {
+            var p = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            p.name = name;
+            p.transform.SetParent(stairsUp, true);
+            p.transform.SetPositionAndRotation(mid + along * offset + Vector3.up * (y0 + height * 0.5f), Quaternion.LookRotation(inward));
+            p.transform.localScale = new Vector3(width + overlap, height + overlap, wallThickness); // x — вдоль стены, z — толщина
+            if (wallMat != null) p.GetComponent<Renderer>().sharedMaterial = wallMat;
+            GameObjectUtility.SetStaticEditorFlags(p, StaticEditorFlags.BatchingStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.OccludeeStatic);
+        }
+        Patch("Opening_Filler_Left", -(frameWidth + side) * 0.5f, side, 0f, openingHeight);
+        Patch("Opening_Filler_Right", (frameWidth + side) * 0.5f, side, 0f, openingHeight);
+        Patch("Opening_Filler_Top", 0f, frameWidth, fb.size.y, top);
+    }
+
+    /// <summary>
+    /// Двери моделей (узлы Door_…), которые так и не стали SwingGate или сюжетным объектом, не открываются —
+    /// на них при взгляде подсказка «Закрыто» (ClosedDoor). Запертые по сюжету SwingGate пишут «Заперто» сами.
+    /// </summary>
+    static void MarkClosedDoors(UnityEngine.SceneManagement.Scene scene)
+    {
+        var marked = new List<string>();
+        foreach (var rootGo in scene.GetRootGameObjects())
+            foreach (var t in rootGo.GetComponentsInChildren<Transform>(false))
+            {
+                if (!t.name.StartsWith("Door_") || t.name.Contains("Broken")) continue;
+                if (t.GetComponentInChildren<SwingGate>(true) != null || t.GetComponentInParent<SwingGate>(true) != null) continue;
+                if (t.GetComponentInChildren<Interactable>(true) != null || t.GetComponentInParent<Interactable>(true) != null) continue;
+                if (t.GetComponentInChildren<Renderer>() == null) continue;
+                t.gameObject.AddComponent<ClosedDoor>(); // дальность подсказки задаёт сам ClosedDoor
+                marked.Add(t.parent != null ? t.parent.name + "/" + t.name : t.name);
+            }
+        if (marked.Count > 0) Debug.Log("CanteenSceneBuilder: закрытые двери (подсказка «Закрыто»): " + string.Join(", ", marked));
     }
 
     static GameObject Spawn(GameObject asset, string name)

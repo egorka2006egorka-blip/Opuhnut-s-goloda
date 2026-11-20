@@ -199,7 +199,8 @@ public class ZombieSpawner : MonoBehaviour
 
         // Лестничные пролёты (Entrance*_StairTunnel*): низ пролёта — (0; 0; −0,7), верхняя площадка — (0; 4,4; −6,4).
         foreach (var t in FindObjectsByType<Transform>())
-            if (t.name.StartsWith("Entrance") && t.name.Contains("StairTunnel"))
+            if (t.name.StartsWith("Entrance") && t.name.Contains("StairTunnel")
+                && t.Find("Tunnel_Shell") is Transform shell && shell.gameObject.activeInHierarchy) // убранная лестница — только дверь
                 Link(t.TransformPoint(new Vector3(0f, 0.05f, -0.7f)), t.TransformPoint(new Vector3(0f, 4.45f, -6.4f)), "лестница " + t.name);
 
         if (report.Count > 0) Debug.Log($"ZombieSpawner: проходы — добавлено связей {added}.\n" + string.Join("\n", report));
