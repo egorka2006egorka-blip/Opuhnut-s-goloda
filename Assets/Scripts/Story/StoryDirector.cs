@@ -5,11 +5,13 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 /// <summary>
-/// Сюжет «Пересдача» (по сценарию Peresdacha_scenarii.docx, под локации игры: столовая → кухня → подвал):
+/// Сюжет «Пересдача» (по сценарию Peresdacha_scenarii.docx, под локации игры: столовая → кухня → подвал → серверная):
 ///  1. Пробуждение (катсцена) → разговор с Галей у раздачи (катсцена) → пистолет у входа → рация, связь с Шапиком.
 ///  2. Оборона столовой: три волны («Зачётные», «Бегуны-опоздуны», «Старосты»), между волнами — магазин Гали.
 ///  3. Галя открывает кухню: спуск в подвал. Декан (босс) — катсцена при пробуждении, реплики в бою, после смерти — лом.
-///  4. Лом — в руки, им сбить замок клетки в зале Декана → Шапик за столом с ноутбуком → развязка, рукопожатие, титры.
+///  4. Лом — в руки, им оторвать доски с двери в задней стене подвала → лестница наверх в серверную.
+///  5. В зале срабатывает аварийная блокировка (ServerLockdown): Шапик заперт в пультовой, лезут зомби;
+///     три мини-игры (рубильники, заражённые серверы, взлом терминала) → пультовая открыта → развязка, рукопожатие, титры.
 /// Реплики и озвучка — DialogueSystem. Ставит CanteenSceneBuilder (ссылки на Галю, пистолет, рацию, двери, Шапика).
 /// </summary>
 public class StoryDirector : MonoBehaviour
@@ -17,7 +19,12 @@ public class StoryDirector : MonoBehaviour
     public enum Stage
     {
         Intro, MeetGalya, GetPistol, GetRadio, Wave1, Break1, Wave2, Break2, Wave3,
-        GoBasement, BossFight, GetCrowbar, OpenDoor, FindShapik, Finale, Credits
+        GoBasement, BossFight, GetCrowbar, OpenDoor, FindShapik,
+        /// <summary>Аварийная блокировка серверной: три мини-игры под натиском зомби (ServerLockdown).</summary>
+        Rescue,
+        /// <summary>Блокировка снята — зайти в пультовую к Шапику.</summary>
+        ReachShapik,
+        Finale, Credits
     }
 
     public static StoryDirector Instance { get; private set; }
@@ -29,12 +36,14 @@ public class StoryDirector : MonoBehaviour
     public static bool CursorNeeded => false;
     /// <summary>Магазин Гали открыт после первой волны (без сюжета — всегда).</summary>
     public static bool ShopAllowed => Instance == null || Instance.stage >= Stage.Break1;
-    /// <summary>Что записать в сохранение: волна — с её начала, бой с боссом — с подхода к подвалу, финал — с поиска Шапика.</summary>
+    /// <summary>Что записать в сохранение: волна — с её начала, бой с боссом — с подхода к подвалу,
+    /// блокировка серверной — заново с входа в зал, финал — с похода в пультовую.</summary>
     public static int SaveStage => Instance == null ? 0 : (int)(Instance.stage switch
     {
         Stage.Intro => Stage.MeetGalya,
         Stage.BossFight => Stage.GoBasement,
-        Stage.Finale or Stage.Credits => Stage.FindShapik,
+        Stage.Rescue => Stage.FindShapik,
+        Stage.Finale or Stage.Credits => Stage.ReachShapik,
         var s => s,
     });
 
@@ -46,7 +55,10 @@ public class StoryDirector : MonoBehaviour
     public WeaponPickup pistol;
     public RadioPickup radio;
     public SwingGate kitchenDoor;
-    public ShapikCage shapikCage;
+    [Tooltip("Заколоченная дверь из подвала на лестницу в серверную.")]
+    public BoardedDoor boardedDoor;
+    [Tooltip("Аварийная блокировка серверной (Шапик заперт в пультовой, три мини-игры).")]
+    public ServerLockdown lockdown;
     public ShapikNpc shapik;
     [Tooltip("Верх лестницы в подвал (на кухне) и вход в подвал — для метки задания.")]
     public Vector3 stairsTop, basementEntrance;
@@ -152,7 +164,8 @@ public class StoryDirector : MonoBehaviour
 
         if (PendingStage >= 0)
         {
-            var s = (Stage)Mathf.Clamp(PendingStage, 0, (int)Stage.FindShapik);
+            var s = (Stage)Mathf.Clamp(PendingStage, 0, (int)Stage.ReachShapik);
+            if (s == Stage.Rescue) s = Stage.FindShapik;
             PendingStage = -1;
             Restore(s);
         }
@@ -163,7 +176,8 @@ public class StoryDirector : MonoBehaviour
     void Restore(Stage s)
     {
         if (s > Stage.GetRadio && radio != null) Destroy(radio.gameObject);
-        if (s >= Stage.FindShapik && shapikCage != null) shapikCage.OpenInstant();
+        if (s >= Stage.FindShapik && boardedDoor != null) boardedDoor.OpenInstant();
+        if (s >= Stage.ReachShapik && lockdown != null) lockdown.CompleteInstant();
         // Лом создаётся из кода (выпадает из Декана) — в сохранённой сцене его нет: кладём заново.
         if ((s == Stage.GetCrowbar || s == Stage.OpenDoor) && CrowbarWeapon.Find() == null)
             CrowbarWeapon.Create(s == Stage.OpenDoor && fpc != null ? fpc.transform.position + fpc.transform.forward * 1.2f : bossHome, Random.Range(0f, 360f));
@@ -192,10 +206,24 @@ public class StoryDirector : MonoBehaviour
             Stage.GoBasement => "Спустись в подвал: кухня за раздачей → лестница вниз",
             Stage.BossFight => "Победи Декана и забери лом",
             Stage.GetCrowbar => "Возьми лом Декана в руки",
-            Stage.OpenDoor => "Сбей ломом замок с клетки Шапика",
-            Stage.FindShapik => "Выпусти Шапика",
+            Stage.OpenDoor => "Оторви ломом доски с двери в конце подвала",
+            Stage.FindShapik => "Поднимись по лестнице в серверную и найди Шапика",
+            Stage.Rescue => RescueObjective(),
+            Stage.ReachShapik => "Зайди в пультовую к Шапику",
             _ => null,
         };
+    }
+
+    /// <summary>Задача блокировки со списком: что уже снято.</summary>
+    string RescueObjective()
+    {
+        if (lockdown == null) return "Сними блокировку пультовой";
+        string Mark(ServerLockdown.Task t) => lockdown.IsSolved(t) ? "[x] " : "[  ] ";
+        int servers = lockdown.servers != null ? lockdown.servers.Length : 3;
+        return "Сними блокировку пультовой (" + lockdown.Solved + " из 3), отбиваясь от зомби:\n" +
+               Mark(ServerLockdown.Task.Breakers) + "рубильники в комнате ИБП\n" +
+               Mark(ServerLockdown.Task.Servers) + "заражённые серверы (" + Mathf.Min(lockdown.ServersPulled, servers) + " из " + servers + ")\n" +
+               Mark(ServerLockdown.Task.Terminal) + "терминал у двери пультовой";
     }
 
     // ---------- Ход сюжета ----------
@@ -262,10 +290,21 @@ public class StoryDirector : MonoBehaviour
                 break;
 
             case Stage.OpenDoor:
-                if (shapikCage == null) SetStage(Stage.FindShapik);
+                if (boardedDoor == null || boardedDoor.IsOpen) SetStage(Stage.FindShapik);
                 break;
 
             case Stage.FindShapik:
+                // Вошёл в зал серверной — срабатывает блокировка. Без блокировки (старая сцена) — сразу к Шапику.
+                if (lockdown != null && !lockdown.Done) { if (lockdown.PlayerInside(p)) StartLockdown(); }
+                else SetStage(Stage.ReachShapik);
+                break;
+
+            case Stage.Rescue:
+                if (lockdown == null || lockdown.Done) SetStage(Stage.ReachShapik);
+                else objective = RescueObjective(); // счётчики меняются по ходу
+                break;
+
+            case Stage.ReachShapik:
                 if (shapik != null && stageClock > 1.5f && Vector3.Distance(p, shapik.transform.position) < 3.3f)
                     StartCoroutine(Finale());
                 break;
@@ -481,6 +520,35 @@ public class StoryDirector : MonoBehaviour
         DialogueSystem.Play("door_open");
     }
 
+    // ---------- Блокировка серверной ----------
+
+    void StartLockdown()
+    {
+        SetStage(Stage.Rescue);
+        lockdown.TaskSolved -= OnLockdownTask;
+        lockdown.TaskSolved += OnLockdownTask;
+        lockdown.Unlocked -= OnLockdownOff;
+        lockdown.Unlocked += OnLockdownOff;
+        lockdown.Begin();
+        DialogueSystem.StopAll();
+        DialogueSystem.Play("lockdown_1", "lockdown_2");
+        Hint("ТРЕВОГА! Аварийная блокировка серверной", 4f);
+    }
+
+    void OnLockdownTask(int solved)
+    {
+        objective = RescueObjective();
+        DialogueSystem.Play(solved <= 1 ? "lockdown_task1" : "lockdown_task2");
+    }
+
+    void OnLockdownOff()
+    {
+        SetStage(Stage.ReachShapik);
+        DialogueSystem.StopAll();
+        DialogueSystem.Play("lockdown_off");
+        Hint("Блокировка снята — пультовая открыта", 4f);
+    }
+
     // ---------- Развязка ----------
 
     IEnumerator Finale()
@@ -520,13 +588,20 @@ public class StoryDirector : MonoBehaviour
 
     Transform SpawnGalya()
     {
-        if (shapikCage == null || fpc == null) return null;
+        if (shapik == null || fpc == null) return null;
         var go = new GameObject("Galya_Finale");
-        // Галя подходит сбоку от игрока, со стороны входа в зал.
-        Vector3 toEntrance = basementEntrance - fpc.transform.position; toEntrance.y = 0f;
-        Vector3 side = toEntrance.sqrMagnitude > 0.01f ? toEntrance.normalized : -fpc.transform.forward;
-        Vector3 pos = fpc.transform.position + side * 1.6f + fpc.transform.right * 0.6f;
-        pos.y = fpc.transform.position.y;
+        // Галя подходит сбоку от игрока, со стороны, откуда он пришёл (от Шапика — назад), на свободное место (не в стойку).
+        Vector3 back = fpc.transform.position - shapik.transform.position; back.y = 0f;
+        back = back.sqrMagnitude > 0.01f ? back.normalized : -fpc.transform.forward;
+        Vector3 right = Vector3.Cross(Vector3.up, back);
+        Vector3 player = fpc.transform.position;
+        Vector3 pos = player + back * 1.6f + right * 0.6f;
+        foreach (var offset in new[] { back * 1.6f + right * 0.6f, back * 1.6f - right * 0.6f, back * 1.2f, right * 1.1f, -right * 1.1f, back * 2.2f })
+        {
+            Vector3 c = player + offset;
+            if (!Physics.CheckCapsule(c + Vector3.up * 0.4f, c + Vector3.up * 1.5f, 0.3f, ~0, QueryTriggerInteraction.Ignore)) { pos = c; break; }
+        }
+        pos.y = player.y;
         Vector3 look = shapik.transform.position - pos; look.y = 0f;
         go.transform.SetPositionAndRotation(pos, Quaternion.LookRotation(look.sqrMagnitude > 0.01f ? look : fpc.transform.forward));
         Shopkeeper.BuildModel(go.transform);
@@ -643,9 +718,14 @@ public class StoryDirector : MonoBehaviour
                 var crowbar = CrowbarWeapon.Find();
                 return crowbar != null && !crowbar.IsHeld && !crowbar.Stowed ? crowbar.transform.position + Vector3.up * 0.4f : (Vector3?)null;
             case Stage.OpenDoor:
-                return shapikCage != null ? shapikCage.Focus + Vector3.up * 0.3f : (Vector3?)null;
+                return boardedDoor != null ? boardedDoor.Focus + Vector3.up * 0.3f : (Vector3?)null;
             case Stage.FindShapik:
+            case Stage.ReachShapik:
                 return shapik != null ? shapik.HeadPosition + Vector3.up * 0.3f : (Vector3?)null;
+            case Stage.Rescue:
+                // Ближайшая нерешённая задача.
+                var next = lockdown != null && fpc != null ? lockdown.NextTarget(fpc.transform.position) : null;
+                return next.HasValue ? next.Value + Vector3.up * 0.25f : (Vector3?)null;
         }
         return null;
     }

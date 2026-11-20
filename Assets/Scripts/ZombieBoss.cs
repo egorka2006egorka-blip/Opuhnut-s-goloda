@@ -132,6 +132,10 @@ public class ZombieBoss : MonoBehaviour
 
     void Awake()
     {
+        // Новая сцена с живым боссом: флаг победы от прошлой загрузки (статический, переживает смену сцены) сбрасываем.
+        // Иначе после загрузки сохранения сюжет считал Декана побеждённым и пропускал катсцену в подвале.
+        // Сохранение с уже побеждённым боссом выставит флаг снова (SaveSystem.Apply → RemoveDefeated идёт после Awake).
+        Defeated = false;
         Health = maxHealth;
         healthShown = maxHealth;
         pivot = transform.Find("Pivot") ?? transform;
@@ -765,7 +769,7 @@ public class ZombieBoss : MonoBehaviour
             ItemPickup.Spawn(ItemDatabase.Coin, coinReward / piles + (i == 0 ? coinReward % piles : 0), c + off);
         }
         ItemPickup.Spawn(ItemDatabase.Medkit, 2, c + Vector3.up * 0.2f);
-        // Лом — им вскрывается клетка Шапика: выкатывается из кармана, подсвечен жёлтым, берётся в руки.
+        // Лом — им отрываются доски с двери в серверную: выкатывается из кармана, подсвечен жёлтым, берётся в руки.
         CrowbarWeapon.Create(transform.position + transform.forward * 2.2f + transform.right * 0.6f, transform.eulerAngles.y + 70f);
         ItemPickup.Spawn(ItemDatabase.Ammo545, 30, c + transform.right * 0.8f);
         ItemPickup.Spawn(ItemDatabase.Ammo12, 10, c - transform.right * 0.8f);

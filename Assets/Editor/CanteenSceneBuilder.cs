@@ -10,7 +10,8 @@ using UnityEngine.Rendering;
 /// Собирает игровую сцену Assets/Scenes/Canteen.unity: столовая, игрок от первого лица (MainCharacter),
 /// пистолет на полу, остальное оружие — товар на прилавке у продавщицы, подвал с боссом, свет.
 /// Запускается автоматически один раз, если сцены ещё нет, и вручную через меню Tools → Canteen → Rebuild Scene.
-/// Подвал, босс и магазин — в CanteenSceneBuilder.Boss.cs.
+/// Подвал, босс и магазин — в CanteenSceneBuilder.Boss.cs, серверная за подвалом — в CanteenSceneBuilder.ServerRoom.cs,
+/// сюжетные объекты (заколоченная дверь, Шапик, записка) — в CanteenSceneBuilder.Story.cs.
 /// </summary>
 [InitializeOnLoad]
 public static partial class CanteenSceneBuilder
@@ -29,7 +30,7 @@ public static partial class CanteenSceneBuilder
     const string EffectsFolder = "Assets/Effects";
     static string AutoBuildKey => "CanteenSceneBuilder.AutoBuilt." + BuildVersion;
     // Увеличивается, когда сборщик меняется — тогда редактор предложит пересобрать сцену.
-    const int BuildVersion = 38;
+    const int BuildVersion = 41;
     static string VersionKey => "CanteenSceneBuilder.Version." + Application.dataPath;
     /// <summary>Сцена есть и собрана текущей версией сборщика.</summary>
     public static bool SceneUpToDate => File.Exists(ScenePath) && EditorPrefs.GetInt(VersionKey, 1) >= BuildVersion;
@@ -44,7 +45,7 @@ public static partial class CanteenSceneBuilder
         {
             if (EditorApplication.isPlayingOrWillChangePlaymode || SceneUpToDate) return;
             if (!File.Exists(ScenePath) || EditorUtility.DisplayDialog("Обновить сцену Canteen?",
-                    "Сборщик сцены обновился: добавлен сюжет «Пересдача»: катсцены и озвученные диалоги, Галя за прилавком, волны зомби, Декан в подвале, его лом можно взять в руки и сбить им замок клетки с Шапиком. Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
+                    "Сборщик сцены обновился: в серверной — аварийная блокировка. Шапик заперт в пультовой, лезут зомби; чтобы его освободить, нужно пройти три мини-игры (рубильники, заражённые серверы, взлом терминала). Пересобрать Assets/Scenes/Canteen.unity?\n\n" +
                     "Ручные изменения в этой сцене будут потеряны. Пересобрать можно и позже: Tools → Canteen → Rebuild Scene.",
                     "Пересобрать", "Позже"))
                 Build();
@@ -82,6 +83,7 @@ public static partial class CanteenSceneBuilder
         // Модель кухни сделана в координатах столовой: в начале координат её передняя стена
         // встаёт вплотную к задней стене столовой, а её дверь совпадает с дверью за калиткой.
         BasementInfo basement = default;
+        ServerRoomInfo server = default;
         Transform stairsDown = null;
         if (kitchenAsset != null)
         {
@@ -92,6 +94,8 @@ public static partial class CanteenSceneBuilder
             stairsDown = BuildStairsDown(canteen.transform, kitchen.transform);
             // ---------- Подвал (арена босса) — под кухней, второй пролёт лестницы ----------
             basement = BuildBasement(canteen.transform, stairsDown);
+            // ---------- Серверная — за задней дверью подвала, по лестнице наверх ----------
+            server = BuildServerRoom(canteen.transform, basement);
             // В проёме остаётся одна дверь — со стороны столовой.
             FindChild(kitchen.transform, "Door_ToCanteen")?.gameObject.SetActive(false);
         }
@@ -230,9 +234,9 @@ public static partial class CanteenSceneBuilder
         // ---------- Босс в подвале ----------
         if (basement.ok) BuildBoss(basement);
 
-        // ---------- Сюжет: рация, комната Шапика, записка, режиссёр ----------
+        // ---------- Сюжет: рация, заколоченная дверь, Шапик в серверной, записка, режиссёр ----------
         Physics.SyncTransforms();
-        BuildStory(canteen.transform, basement, stairsDown);
+        BuildStory(canteen.transform, basement, stairsDown, server);
 
         // ---------- Аптечки и патроны на столах ----------
         LevelPropsSetup.PlaceLoot(spawn);

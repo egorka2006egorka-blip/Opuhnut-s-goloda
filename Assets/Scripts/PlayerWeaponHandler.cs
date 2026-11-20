@@ -146,7 +146,7 @@ public class PlayerWeaponHandler : MonoBehaviour
             lookStory.Interact(gameObject);
         else if (interact && lookGate != null)
         {
-            if (lookGate.Locked && !lookGate.IsOpen) DialogueSystem.ShowText("GALYA", lookGate.lockedMessage, 2.5f);
+            if (lookGate.Locked && !lookGate.IsOpen) DialogueSystem.ShowText(lookGate.lockedSpeaker, lookGate.lockedMessage, 2.5f);
             else lookGate.Toggle(transform.position);
         }
         else if (interact && lookShop != null)
@@ -181,7 +181,7 @@ public class PlayerWeaponHandler : MonoBehaviour
     float swing = -1f; // фаза удара 0..1, меньше 0 — не бьёт
     bool swingHit;
 
-    /// <summary>Замах и удар ломом (и для взлома замка клетки).</summary>
+    /// <summary>Замах и удар ломом (и для взлома замка клетки / досок на двери).</summary>
     public void PlaySwing()
     {
         if (!Melee || (swing >= 0f && swing < 0.6f)) return;
@@ -230,6 +230,8 @@ public class PlayerWeaponHandler : MonoBehaviour
             }
             else if (h.collider.GetComponentInParent<ShapikCage>() is ShapikCage cage && !cage.IsOpen && Vector3.Distance(point, cage.Focus) < 0.9f)
                 cage.Interact(gameObject); // удар ЛКМ по замку клетки — тоже взлом
+            else if (h.collider.GetComponentInParent<BoardedDoor>() is BoardedDoor boarded && !boarded.IsOpen)
+                boarded.Interact(gameObject); // удар ЛКМ по доске — тоже поддеть её
             else
             {
                 AudioSource.PlayClipAtPoint(BossSounds.Slam(), point, 0.25f * GameSettings.EffectsVolume);

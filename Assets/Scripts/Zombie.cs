@@ -133,6 +133,7 @@ public class Zombie : MonoBehaviour
     ZombieDancer dancer; // пасхалка: танец по секретной кнопке (ZombieDance), если в контроллере нет клипа Dance
     const string DanceState = "Dance"; // как ZombieAnimationSetup.Dance
     bool dancing;
+    int danceLoop; // номер повтора связки, который сейчас играет клип
     int hasDanceClip = -1; // -1 — ещё не проверяли
     bool HasDanceClip
     {
@@ -558,14 +559,17 @@ public class Zombie : MonoBehaviour
     void DanceUpdate(float dt)
     {
         if (act != Act.Move) EndAct();
-        if (!dancing)
+        // Связка повторяется, пока играет песня: на каждом новом круге клип начинается заново (у всех зомби — по общим часам).
+        int loop = Mathf.FloorToInt(ZombieDance.Clock / ZombieDance.LoopLength);
+        if (!dancing || loop != danceLoop)
         {
-            dancing = true;
             if (HasDanceClip)
             {
                 animator.speed = 1f;
-                animator.CrossFadeInFixedTime(DanceState, 0.25f, 0, ZombieDance.Clock);
+                animator.CrossFadeInFixedTime(DanceState, dancing ? 0.3f : 0.25f, 0, ZombieDance.Clock - loop * ZombieDance.LoopLength);
             }
+            dancing = true;
+            danceLoop = loop;
         }
         if (agent != null && agent.isOnNavMesh) agent.isStopped = true;
         stuckClock = 0f;

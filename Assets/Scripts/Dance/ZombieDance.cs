@@ -2,7 +2,9 @@ using UnityEngine;
 
 /// <summary>
 /// Пасхалка: после нажатия секретной кнопки (SecretDanceButton) все живые зомби бросают погоню и танцуют
-/// под бит связку «Я тебя могну» (снята по видео, 14,4 с). Позы строит ZombieDancer.
+/// связку «Я тебя могну» (снята по видео, 14,4 с). Позы — клип Dance или ZombieDancer.
+/// Музыка — песня Assets/Resources/Music/DanceTrack: играет целиком, связка всё это время повторяется по кругу.
+/// Без песни — синтезированный бит, танец длится одну связку.
 /// Часы танца идут по Time.deltaTime — на паузе зомби и музыка замирают.
 /// </summary>
 public class ZombieDance : MonoBehaviour
@@ -14,8 +16,14 @@ public class ZombieDance : MonoBehaviour
     static ZombieDance instance;
     float clock = -1f;
     AudioSource music;
+    bool song; // играет песня (а не синтезированный бит)
 
-    public static float Duration => ZombieDancer.TotalBeats * 60f / Bpm;
+    /// <summary>Длина одной связки (видео 14,4 с) — танец повторяет её по кругу.</summary>
+    public static float LoopLength => ZombieDancer.TotalBeats * 60f / Bpm;
+
+    /// <summary>Сколько длится танец: вся песня или одна связка под синтезированный бит.</summary>
+    public static float Duration => instance != null && instance.song && instance.music.clip != null
+        ? Mathf.Max(LoopLength, instance.music.clip.length - FadeOut) : LoopLength;
 
     /// <summary>Зомби стоят и танцуют (включая плавный вход и выход).</summary>
     public static bool Active => instance != null && instance.clock >= 0f && instance.clock < Duration + FadeOut;
@@ -34,8 +42,8 @@ public class ZombieDance : MonoBehaviour
     /// <summary>Секунды от начала танца (по ним зомби, появившийся посреди танца, попадает в такт).</summary>
     public static float Clock => instance != null ? Mathf.Max(0f, instance.clock) : 0f;
 
-    /// <summary>Номер доли от начала танца.</summary>
-    public static float Beat => instance != null ? Mathf.Max(0f, instance.clock) * Bpm / 60f : 0f;
+    /// <summary>Номер доли внутри текущего повтора связки (0 … TotalBeats).</summary>
+    public static float Beat => instance != null ? Mathf.Repeat(Mathf.Max(0f, instance.clock), LoopLength) * Bpm / 60f : 0f;
 
     public static void Begin()
     {
@@ -46,11 +54,12 @@ public class ZombieDance : MonoBehaviour
             instance = go.AddComponent<ZombieDance>();
             var src = go.AddComponent<AudioSource>();
             src.playOnAwake = false;
-            src.loop = true;
             src.spatialBlend = 0f;
             src.volume = 0.8f;
-            // Свой трек можно положить в Assets/Resources/Music/DanceTrack (темп — Bpm), иначе — синтезированный бит.
+            // Песня «Я тебя могну» — Assets/Resources/Music/DanceTrack, играет один раз целиком; без неё — бит по кругу.
             var track = Resources.Load<AudioClip>("Music/DanceTrack");
+            instance.song = track != null;
+            src.loop = track == null;
             src.clip = track != null ? track : DanceBeat.Create(Bpm, MusicBeats);
             go.AddComponent<SoundCategory>().kind = SoundKind.Music;
             instance.music = src;

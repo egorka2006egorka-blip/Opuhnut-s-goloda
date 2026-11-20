@@ -30,6 +30,8 @@ public class SwingGate : MonoBehaviour
     /// <summary>Заперта (по сюжету): не открывается ни игроком, ни зомби. lockedMessage — подсказка игроку.</summary>
     public bool Locked { get; set; }
     public string lockedMessage = "Заперто";
+    [Tooltip("Кто говорит lockedMessage (GALYA, STUDENT, SHAPIK…).")]
+    public string lockedSpeaker = "GALYA";
 
     Quaternion[] closedRot;
     Vector3[] closedPos, hinge, closedCenters;
